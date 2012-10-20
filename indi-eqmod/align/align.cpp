@@ -91,6 +91,7 @@ bool Align::initProperties()
 
 void Align::ISGetProperties (const char *dev)
 {
+  //if (dev && (strcmp(dev, telescope->getDeviceName()))) return;
   if (telescope->isConnected())
     {
       telescope->defineText(AlignDataFileTP);
@@ -100,15 +101,16 @@ void Align::ISGetProperties (const char *dev)
       telescope->defineNumber(AlignTelescopeCoordsNP);
       telescope->defineSwitch(AlignOptionsSP);
       telescope->defineSwitch(AlignModeSP);
-    } else {
-    telescope->deleteProperty(AlignDataBP->name);
-    telescope->deleteProperty(AlignPointNP->name);
-    telescope->deleteProperty(AlignListSP->name);
-    telescope->deleteProperty(AlignTelescopeCoordsNP->name);
-    telescope->deleteProperty(AlignOptionsSP->name);
-    telescope->deleteProperty(AlignModeSP->name);
-    telescope->deleteProperty(AlignDataFileTP->name);
-  }
+      } else {
+      telescope->deleteProperty(AlignDataBP->name);
+      telescope->deleteProperty(AlignPointNP->name);
+      telescope->deleteProperty(AlignListSP->name);
+      telescope->deleteProperty(AlignTelescopeCoordsNP->name);
+      telescope->deleteProperty(AlignOptionsSP->name);
+      telescope->deleteProperty(AlignModeSP->name);
+      telescope->deleteProperty(AlignDataFileTP->name);
+   }
+  
 }
 
 bool Align::updateProperties ()
@@ -123,14 +125,14 @@ bool Align::updateProperties ()
       telescope->defineSwitch(AlignOptionsSP);
       telescope->defineSwitch(AlignModeSP);
     } else {
-    telescope->deleteProperty(AlignDataBP->name);
-    telescope->deleteProperty(AlignPointNP->name);
-    telescope->deleteProperty(AlignListSP->name);
-    telescope->deleteProperty(AlignTelescopeCoordsNP->name);
-    telescope->deleteProperty(AlignOptionsSP->name);
-    telescope->deleteProperty(AlignModeSP->name);
-    telescope->deleteProperty(AlignDataFileTP->name);
-  }
+      telescope->deleteProperty(AlignDataBP->name);
+      telescope->deleteProperty(AlignPointNP->name);
+      telescope->deleteProperty(AlignListSP->name);
+      telescope->deleteProperty(AlignTelescopeCoordsNP->name);
+      telescope->deleteProperty(AlignOptionsSP->name);
+      telescope->deleteProperty(AlignModeSP->name);
+      telescope->deleteProperty(AlignDataFileTP->name);
+    }
   return true;
 }
 
