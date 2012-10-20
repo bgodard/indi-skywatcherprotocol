@@ -142,7 +142,7 @@ EQMod::EQMod()
   RAInverted = DEInverted = false;
   bzero(&syncdata, sizeof(syncdata));
 
-  align=new Align(this);
+  //align=new Align(this);
   /* initialize random seed: */
   srand ( time(NULL) );
 }
@@ -164,7 +164,9 @@ bool EQMod::initProperties()
 {
     /* Make sure to init parent properties first */
     INDI::Telescope::initProperties();
-    //IDMessage(DEVICE_NAME,"initProperties: connected=%d", (isConnected()?1:0));
+
+    //IDMessage(this->getDeviceName(),"initProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
+    //IDLog("initProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
     /* Load properties from the skeleton file */
     char skelPath[MAX_PATH_LENGTH];
     const char *skelFileName = "indi_eqmod_sk.xml";
@@ -179,10 +181,6 @@ bool EQMod::initProperties()
     else 
       IDLog("No skeleton file was specified. Set environment variable INDISKEL to the skeleton path and try again.\n"); 
     
-    GuideNSNP=getNumber("TELESCOPE_TIMED_GUIDE_NS");
-    GuideNSN=GuideNSNP->np;
-    GuideWENP=getNumber("TELESCOPE_TIMED_GUIDE_WE");
-    GuideWEN=GuideWENP->np;
     GuideRateNP=getNumber("GUIDE_RATE");
     GuideRateN=GuideRateNP->np;
     
@@ -197,10 +195,13 @@ bool EQMod::initProperties()
     PierSideSP=getSwitch("PIERSIDE");
     TrackModeSP=getSwitch("TRACKMODE");
     TrackRatesNP=getNumber("TRACKRATES");
-    AbortMotionSP=getSwitch("TELESCOPE_ABORT_MOTION");
+    //AbortMotionSP=getSwitch("TELESCOPE_ABORT_MOTION");
     HorizontalCoordsNP=getNumber("HORIZONTAL_COORDS");
 
-    if (!align->initProperties()) return false;
+    //if (!align->initProperties()) return false;
+
+    INDI::GuiderInterface::initGuiderProperties(this->getDeviceName(), MOTION_TAB);
+
     /* Add debug controls so we may debug driver if necessary */
     addDebugControl();
     
@@ -209,14 +210,15 @@ bool EQMod::initProperties()
 
 void EQMod::ISGetProperties (const char *dev)
 {
+  //if (dev && (strcmp(dev, this->getDeviceName()))) return;
     /* First we let our parent populate */
     INDI::Telescope::ISGetProperties(dev);
-    //IDMessage(DEVICE_NAME,"ISGetProperties: connected=%d", (isConnected()?1:0));
-     if(isConnected())
+    //IDMessage(dev,"ISGetProperties: connected=%d %s", (isConnected()?1:0), dev);
+    if(isConnected())
     {
+      defineNumber(&GuideNSP);
+      defineNumber(&GuideEWP);
       defineNumber(SlewSpeedsNP);
-      defineNumber(GuideNSNP);
-      defineNumber(GuideWENP);
       defineNumber(GuideRateNP);
       defineText(MountInformationTP);
       defineNumber(SteppersNP);
@@ -229,10 +231,8 @@ void EQMod::ISGetProperties (const char *dev)
       defineNumber(TrackRatesNP);
       defineNumber(HorizontalCoordsNP);
       defineSwitch(PierSideSP);
-      defineSwitch(AbortMotionSP);
-    } else {
-      deleteProperty(GuideNSNP->name);
-      deleteProperty(GuideWENP->name);
+      //defineSwitch(AbortMotionSP);
+      /* }  else {
       deleteProperty(GuideRateNP->name);
       deleteProperty(MountInformationTP->name);
       deleteProperty(SteppersNP->name);
@@ -246,22 +246,23 @@ void EQMod::ISGetProperties (const char *dev)
       deleteProperty(TrackRatesNP->name);
       deleteProperty(HorizontalCoordsNP->name);
       deleteProperty(PierSideSP->name);
-      deleteProperty(AbortMotionSP->name);
-    }
-    
-    align->ISGetProperties(dev);
+      //deleteProperty(AbortMotionSP->name);     
+      */
+      }
+
+    //align->ISGetProperties(dev);
     return;
 }
 
 bool EQMod::updateProperties()
 {
     INDI::Telescope::updateProperties();
-    //IDMessage(DEVICE_NAME,"updateProperties: connected=%d", (isConnected()?1:0));
+    //IDMessage(this->getDeviceName(),"updateProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
     if (isConnected())
     {
+      defineNumber(&GuideNSP);
+      defineNumber(&GuideEWP);
       defineNumber(SlewSpeedsNP);
-      defineNumber(GuideNSNP);
-      defineNumber(GuideWENP);
       defineNumber(GuideRateNP);
       defineText(MountInformationTP);
       defineNumber(SteppersNP);
@@ -274,12 +275,12 @@ bool EQMod::updateProperties()
       defineNumber(TrackRatesNP);
       defineNumber(HorizontalCoordsNP);
       defineSwitch(PierSideSP);
-      defineSwitch(AbortMotionSP);
+      //defineSwitch(AbortMotionSP);
     }
     else
     {
-      deleteProperty(GuideNSNP->name);
-      deleteProperty(GuideWENP->name);
+      deleteProperty(GuideNSP.name);
+      deleteProperty(GuideEWP.name);
       deleteProperty(GuideRateNP->name);
       deleteProperty(MountInformationTP->name);
       deleteProperty(SteppersNP->name);
@@ -293,9 +294,9 @@ bool EQMod::updateProperties()
       deleteProperty(TrackRatesNP->name);
       deleteProperty(HorizontalCoordsNP->name);
       deleteProperty(PierSideSP->name);
-      deleteProperty(AbortMotionSP->name);
+      //deleteProperty(AbortMotionSP->name);
     }
-    if (!align->updateProperties()) return false;
+    //if (!align->updateProperties()) return false;
     return true;
 }
 
@@ -363,7 +364,7 @@ bool EQMod::Connect(char *port)
     return false;
   }
 
-  if (align) align->Init();
+  //if (align) align->Init();
   IDMessage(DEVICE_NAME, "Successfully connected to EQMod Mount.");
   return true;
 }
@@ -442,7 +443,7 @@ bool EQMod::ReadScopeStatus() {
   try {
     currentRAEncoder=mount->GetRAEncoder();
     currentDEEncoder=mount->GetDEEncoder();
-    if (isDebug()) IDMessage(DEVICE_NAME, "Current encoders RA=%d DE=%d", currentRAEncoder, currentDEEncoder);
+    if (isDebug()) IDMessage(DEVICE_NAME, "Current encoders RA=%ld DE=%ld", currentRAEncoder, currentDEEncoder);
     EncodersToRADec(currentRAEncoder, currentDEEncoder, lst, &currentRA, &currentDEC, &currentHA);
     alignedRA=currentRA; alignedDEC=currentDEC;
     if (align) 
@@ -496,7 +497,7 @@ bool EQMod::ReadScopeStatus() {
 	  EncoderTarget(&gotoparams);
 	  try {    
 	    // Start iterative slewing
-	    IDMessage(DEVICE_NAME, "Iterative goto (%d): slew mount to RA increment = %d, DE increment = %d", gotoparams.iterative_count, 
+	    IDMessage(DEVICE_NAME, "Iterative goto (%d): slew mount to RA increment = %ld, DE increment = %ld", gotoparams.iterative_count, 
 		      gotoparams.ratargetencoder - gotoparams.racurrentencoder, gotoparams.detargetencoder - gotoparams.decurrentencoder);
 	    mount->SlewTo(gotoparams.ratargetencoder - gotoparams.racurrentencoder, gotoparams.detargetencoder - gotoparams.decurrentencoder);
 	  } catch(EQModError e) {
@@ -830,7 +831,7 @@ bool EQMod::Goto(double r,double d)
       mount->StopRA();
       mount->StopDE();
       // Start slewing
-      IDMessage(DEVICE_NAME, "Slew mount to RA increment = %d, DE increment = %d", 
+      IDMessage(DEVICE_NAME, "Slew mount to RA increment = %ld, DE increment = %ld", 
 		gotoparams.ratargetencoder - gotoparams.racurrentencoder, gotoparams.detargetencoder - gotoparams.decurrentencoder);
       mount->SlewTo(gotoparams.ratargetencoder - gotoparams.racurrentencoder, gotoparams.detargetencoder - gotoparams.decurrentencoder);
 
@@ -854,6 +855,16 @@ bool EQMod::Goto(double r,double d)
 
     IDMessage(getDeviceName(), "Slewing to RA: %s - DEC: %s", RAStr, DecStr);
     return true;
+}
+
+bool EQMod::canSync()
+{
+  return false;
+}
+
+bool EQMod::canPark()
+{
+  return false;
 }
 
 bool EQMod::Park()
@@ -896,6 +907,49 @@ bool EQMod::Sync(double ra,double dec)
   if (align) align->AlignSync(syncdata.lst, syncdata.jd, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
   IDMessage(getDeviceName(),"Mount Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
   return true;
+}
+
+bool EQMod::GuideNorth(float ms) {
+  double rateshift=0.0;
+  rateshift = TRACKRATE_SIDEREAL * IUFindNumber(GuideRateNP, "GUIDE_RATE_NS")->value;
+  if (DEInverted) rateshift = -rateshift;
+  if (ms > 0.0) {
+    mount->StartDETracking(GetDETrackRate() + rateshift);
+    GuideTimerNS = IEAddTimer((int)(ms * 1000.0), (IE_TCF *)timedguideNSCallback, this);
+    IDMessage(getDeviceName(), "Timed guide North %d ms",(int)(ms * 1000.0));
+  }
+}
+
+bool EQMod::GuideSouth(float ms) {
+  double rateshift=0.0;
+  rateshift = TRACKRATE_SIDEREAL * IUFindNumber(GuideRateNP, "GUIDE_RATE_NS")->value;
+  if (ms > 0.0) {
+    mount->StartDETracking(GetDETrackRate() - rateshift);
+    GuideTimerNS = IEAddTimer((int)(ms * 1000.0), (IE_TCF *)timedguideNSCallback, this);
+    IDMessage(getDeviceName(), "Timed guide South %d ms",(int)(ms * 1000.0));
+  }
+}
+
+bool EQMod::GuideEast(float ms) {
+  double rateshift=0.0;
+  rateshift = TRACKRATE_SIDEREAL * IUFindNumber(GuideRateNP, "GUIDE_RATE_WE")->value;
+  if (RAInverted) rateshift = -rateshift;
+  if (ms > 0.0) {
+    mount->StartRATracking(GetRATrackRate() - rateshift);
+    GuideTimerWE = IEAddTimer((int)(ms * 1000.0), (IE_TCF *)timedguideWECallback, this);
+    IDMessage(getDeviceName(), "Timed guide EAST %d ms",(int)(ms * 1000.0));
+  }
+}
+
+bool EQMod::GuideWest(float ms) {
+  double rateshift=0.0;
+  rateshift = TRACKRATE_SIDEREAL * IUFindNumber(GuideRateNP, "GUIDE_RATE_WE")->value;
+  if (RAInverted) rateshift = -rateshift;
+  if (ms > 0.0) {
+    mount->StartRATracking(GetRATrackRate() + rateshift);
+    GuideTimerWE = IEAddTimer((int)(ms * 1000.0), (IE_TCF *)timedguideWECallback, this);
+    IDMessage(getDeviceName(), "Timed guide West %d ms",(int)(ms * 1000.0));
+  }
 }
 
 bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], char *names[], int n)
@@ -952,90 +1006,22 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 	  return true;
 	}
 
-      if(strcmp(name,"TELESCOPE_TIMED_GUIDE_NS")==0)
+      // Guider interface
+      if (!strcmp(name,GuideNSP.name) || !strcmp(name,GuideEWP.name))
 	{
-	  double rateshift=0.0;
 	  // Unless we're in track mode, we don't obey guide commands.
 	  if (TrackState != SCOPE_TRACKING)
 	    {
-	      GuideNSNP->s = IPS_IDLE;
-	      IDSetNumber(GuideNSNP, NULL);
+	      GuideNSP.s = IPS_IDLE;
+	      IDSetNumber(&GuideNSP, NULL);
+	      GuideEWP.s = IPS_IDLE;
+	      IDSetNumber(&GuideEWP, NULL);
+	      IDMessage(this->getDeviceName(), "Can not guide if not tracking.");
 	      return true;
 	    }
 
-	  if (IUUpdateNumber(GuideNSNP, values, names, n) == -1) {
-	    GuideNSNP->s = IPS_IDLE;
-	    IDSetNumber(GuideNSNP, NULL);
-	    return true;
-
-	  }
-
-	  if ((GuideNSN[GUIDE_NORTH].value > 0.0) && (GuideNSN[GUIDE_SOUTH].value > 0.0)) {
-	    IDMessage(getDeviceName(), "Can not guide in both directions (North/South).");
-	    GuideNSN[GUIDE_NORTH].value = GuideNSN[GUIDE_SOUTH].value = 0;
-	    GuideNSNP->s = IPS_IDLE;
-	    IDSetNumber(GuideNSNP, NULL);
-	    return true;
-	    }
-
-	  rateshift = TRACKRATE_SIDEREAL * IUFindNumber(GuideRateNP, "GUIDE_RATE_NS")->value;
-	  if (DEInverted) rateshift = -rateshift;
-	  if (GuideNSN[GUIDE_NORTH].value > 0.0) {
-	    mount->StartDETracking(GetDETrackRate() + rateshift);
-
-	    GuideTimerNS = IEAddTimer((int)(GuideNSN[GUIDE_NORTH].value * 1000.0), (IE_TCF *)timedguideNSCallback, this);
-	    IDMessage(getDeviceName(), "Timed guide North %d ms",(int)(GuideNSN[GUIDE_NORTH].value * 1000.0));
-	  } else {
-	    mount->StartDETracking(GetDETrackRate() - rateshift);
-	    GuideTimerNS = IEAddTimer((int)(GuideNSN[GUIDE_SOUTH].value * 1000.0), (IE_TCF *)timedguideNSCallback, this);
-	    IDMessage(getDeviceName(), "Timed guide South %d ms",(int)(GuideNSN[GUIDE_SOUTH].value * 1000.0));
-	  }
-
-	  GuideNSNP->s = IPS_BUSY;
-	  IDSetNumber(GuideNSNP, NULL);
+	  processGuiderProperties(name, values, names, n);
 	 
-	  return true;
-	}
-
-      if(strcmp(name,"TELESCOPE_TIMED_GUIDE_WE")==0)
-	{
-	  double rateshift=0.0;
-	  // Unless we're in track mode, we don't obey guide commands.
-	  if (TrackState != SCOPE_TRACKING)
-	    {
-	      GuideWENP->s = IPS_IDLE;
-	      IDSetNumber(GuideWENP, NULL);
-	      return true;
-	    }
-	  
-	  if (IUUpdateNumber(GuideWENP, values, names, n) == -1) {   
-	    GuideWENP->s = IPS_IDLE;
-	    IDSetNumber(GuideWENP, NULL);
-	    return true;
-	  }
-	  if ((GuideWEN[GUIDE_WEST].value > 0.0) && (GuideWEN[GUIDE_EAST].value > 0.0)) {
-	    IDMessage(getDeviceName(), "Can not guide in both directions (West/East).");
-	    GuideWEN[GUIDE_WEST].value = GuideWEN[GUIDE_EAST].value = 0;
-	    GuideWENP->s = IPS_IDLE;
-	    IDSetNumber(GuideWENP, NULL);
-	    return true;
-	    }
-
-	  rateshift = TRACKRATE_SIDEREAL * IUFindNumber(GuideRateNP, "GUIDE_RATE_WE")->value;
-	  if (RAInverted) rateshift = -rateshift;
-	  if (GuideWEN[GUIDE_WEST].value > 0.0) {
-	    mount->StartRATracking(GetRATrackRate() + rateshift);
-	    GuideTimerWE = IEAddTimer((int)(GuideWEN[GUIDE_WEST].value * 1000.0), (IE_TCF *)timedguideWECallback, this);
-	    IDMessage(getDeviceName(), "Timed guide West %d ms",(int)(GuideWEN[GUIDE_WEST].value * 1000.0));
-	  } else {
-	    mount->StartRATracking(GetRATrackRate() - rateshift);
-	    GuideTimerWE = IEAddTimer((int)(GuideWEN[GUIDE_EAST].value * 1000.0), (IE_TCF *)timedguideWECallback, this);
-	    IDMessage(getDeviceName(), "Timed guide EAST %d ms",(int)(GuideWEN[GUIDE_EAST].value * 1000.0));
-	  }
-
-	  GuideWENP->s = IPS_BUSY;
-	  IDSetNumber(GuideWENP, NULL);
-	  
 	  return true;
 	}
 
@@ -1047,6 +1033,7 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 	  return true;
 	}
       
+      // Observer
       if(strcmp(name,"GEOGRAPHIC_COORD")==0)
 	{
 	  unsigned int i;
@@ -1081,29 +1068,7 @@ bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 
     if(strcmp(dev,getDeviceName())==0)
     {      
-      if(strcmp(name,"TELESCOPE_ABORT_MOTION")==0)
- 	{ 
-	  mount->StopRA();
-	  mount->StopDE();
-	  // Reset switches
-	  GuideNSNP->s = IPS_IDLE;
-	  IDSetNumber(GuideNSNP, NULL);
-	  GuideWENP->s = IPS_IDLE;
-	  IDSetNumber(GuideWENP, NULL);
-	  TrackModeSP->s=IPS_IDLE;
-	  IDSetSwitch(TrackModeSP,NULL);       
-	  MovementNSSP.s = IPS_IDLE;
-	  IDSetSwitch(&MovementNSSP, NULL);
-	  MovementWESP.s = IPS_IDLE;
-	  IDSetSwitch(&MovementWESP, NULL);
-	  EqNV.s = IPS_IDLE;
-	  IDSetNumber(&EqNV, NULL);
-	  AbortMotionSP->s=IPS_IDLE;
-	  IDSetSwitch(AbortMotionSP, NULL);
 
-	  TrackState=SCOPE_IDLE;
-	  return true;
-	}
       if(strcmp(name,"TRACKMODE")==0)
  	{  
 	  ISwitch *swbefore, *swafter;
@@ -1284,12 +1249,68 @@ bool EQMod::MoveWE(TelescopeMotionWE dir)
 
 }
 
+bool EQMod::Abort()
+{
+  mount->StopRA();
+  mount->StopDE();
+  INDI::Telescope::Abort();
+  // Reset switches
+  GuideNSP.s = IPS_IDLE;
+  IDSetNumber(&GuideNSP, NULL);
+  GuideEWP.s = IPS_IDLE;
+  IDSetNumber(&GuideEWP, NULL);
+  TrackModeSP->s=IPS_IDLE;
+  IUResetSwitch(TrackModeSP);
+  IDSetSwitch(TrackModeSP,NULL);    
+
+  if (MovementNSSP.s == IPS_BUSY)
+    {
+      IUResetSwitch(&MovementNSSP);
+      MovementNSSP.s = IPS_IDLE;
+      IDSetSwitch(&MovementNSSP, NULL);
+    }
+  
+  if (MovementWESP.s == IPS_BUSY)
+    {
+      MovementWESP.s = IPS_IDLE;
+      IUResetSwitch(&MovementWESP);
+      IDSetSwitch(&MovementWESP, NULL);
+    }
+  
+  if (ParkSV.s == IPS_BUSY)
+    {
+      ParkSV.s       = IPS_IDLE;
+      IUResetSwitch(&ParkSV);
+      IDSetSwitch(&ParkSV, NULL);
+    }
+  
+  if (EqReqNV.s == IPS_BUSY)
+    {
+      EqReqNV.s      = IPS_IDLE;
+      IDSetNumber(&EqReqNV, NULL);
+    }
+  
+  if (EqNV.s == IPS_BUSY)
+    {
+      EqNV.s = IPS_IDLE;
+      IDSetNumber(&EqNV, NULL);
+    }   
+
+  TrackState=SCOPE_IDLE;
+
+  AbortSV.s=IPS_OK;
+  IUResetSwitch(&AbortSV);
+  IDSetSwitch(&AbortSV, "Telescope Aborted");
+
+  return true;
+}
+
 void EQMod::timedguideNSCallback(void *userpointer) {
   EQMod *p = ((EQMod *)userpointer);
   p->mount->StartDETracking(p->GetDETrackRate());
-  p->GuideNSNP->s = IPS_IDLE;
-  p->GuideNSN[GUIDE_NORTH].value = p->GuideNSN[GUIDE_SOUTH].value = 0;
-  IDSetNumber(p->GuideNSNP, NULL);
+  p->GuideNSP.s = IPS_IDLE;
+  //p->GuideNSN[GUIDE_NORTH].value = p->GuideNSN[GUIDE_SOUTH].value = 0;
+  IDSetNumber(&(p->GuideNSP), NULL);
   IDMessage(p->getDeviceName(), "End Timed guide North/South");
   IERmTimer(p->GuideTimerNS);
 }
@@ -1297,9 +1318,9 @@ void EQMod::timedguideNSCallback(void *userpointer) {
 void EQMod::timedguideWECallback(void *userpointer) {
   EQMod *p = ((EQMod *)userpointer);
   p->mount->StartRATracking(p->GetRATrackRate());
-  p->GuideWENP->s = IPS_IDLE;
-  p->GuideWEN[GUIDE_WEST].value = p->GuideWEN[GUIDE_EAST].value = 0;
-  IDSetNumber(p->GuideWENP, NULL);
+  p->GuideEWP.s = IPS_IDLE;
+  //p->GuideWEN[GUIDE_WEST].value = p->GuideWEN[GUIDE_EAST].value = 0;
+  IDSetNumber(&(p->GuideEWP), NULL);
   IDMessage(p->getDeviceName(), "End Timed guide West/East");
   IERmTimer(p->GuideTimerWE);
 }

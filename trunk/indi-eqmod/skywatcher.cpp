@@ -248,11 +248,11 @@ void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP) throw (EQModE
   }
   
   boardinfo[1]=(char *) malloc(5);
-  sprintf(boardinfo[1],"%04x", (MCVersion >> 8));
+  sprintf(boardinfo[1],"%04lx", (MCVersion >> 8));
   boardinfo[1][4]='\0';
   // should test this is ok
   IUUpdateText(boardTP, boardinfo, (char **)boardinfopropnames, nprop);
-
+  IDSetText(boardTP,NULL);
   /* Check supported mounts here */
   if ((MountCode == 0x80) || (MountCode == 0x81) || (MountCode == 0x82) || (MountCode == 0x90)) {
     
@@ -296,6 +296,7 @@ void Skywatcher::InquireRAEncoderInfo(INumberVectorProperty *encoderNP) throw (E
   steppersvalues[2]=(double)RAHighspeedRatio;
   // should test this is ok
   IUUpdateNumber(encoderNP, steppersvalues, (char **)steppersnames, 3);
+  IDSetNumber(encoderNP, NULL);
 }
 
 void Skywatcher::InquireDEEncoderInfo(INumberVectorProperty *encoderNP) throw (EQModError) {
@@ -331,6 +332,7 @@ void Skywatcher::InquireDEEncoderInfo(INumberVectorProperty *encoderNP) throw (E
   steppersvalues[2]=(double)DEHighspeedRatio;
   // should test this is ok
   IUUpdateNumber(encoderNP, steppersvalues, (char **)steppersnames, 3);
+  IDSetNumber(encoderNP, NULL);
 }
 
 bool Skywatcher::IsRARunning() throw (EQModError)

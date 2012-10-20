@@ -19,11 +19,12 @@
 #define EQMOD_H
 
 #include <inditelescope.h>
+#include <indiguiderinterface.h>
 
 #include "skywatcher.h"
 #include "align/align.h"
 
-class EQMod : public INDI::Telescope
+class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 {
     protected:
     private:
@@ -44,12 +45,8 @@ class EQMod : public INDI::Telescope
 	struct ln_lnlat_posn lnobserver; 
 	struct ln_hrz_posn lnaltaz;
         
-	INumber *GuideNSN;
-        INumberVectorProperty *GuideNSNP;
 	int GuideTimerNS;
 
-        INumber *GuideWEN;
-        INumberVectorProperty *GuideWENP;
 	int GuideTimerWE;
 
         INumber *GuideRateN;
@@ -66,7 +63,7 @@ class EQMod : public INDI::Telescope
 	ISwitchVectorProperty *PierSideSP;
 	ISwitchVectorProperty *TrackModeSP;
        	INumberVectorProperty *TrackRatesNP;
-	ISwitchVectorProperty *AbortMotionSP;
+	//ISwitchVectorProperty *AbortMotionSP;
 	INumberVectorProperty *HorizontalCoordsNP;
 
 	enum Hemisphere {NORTH=0, SOUTH=1 };
@@ -132,10 +129,19 @@ class EQMod : public INDI::Telescope
 
         virtual bool MoveNS(TelescopeMotionNS dir);
         virtual bool MoveWE(TelescopeMotionWE dir);
+	virtual bool Abort();
+
+	virtual bool GuideNorth(float ms);
+	virtual bool GuideSouth(float ms);
+	virtual bool GuideEast(float ms);
+	virtual bool GuideWest(float ms);
+
 
         bool Goto(double ra,double dec);
         bool Park();
 	bool Sync(double ra,double dec);
+        virtual bool canSync();
+        virtual bool canPark();
 
 };
 
