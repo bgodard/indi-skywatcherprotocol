@@ -165,38 +165,7 @@ bool EQMod::initProperties()
     /* Make sure to init parent properties first */
     INDI::Telescope::initProperties();
 
-    //IDMessage(this->getDeviceName(),"initProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
     //IDLog("initProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
-    /* Load properties from the skeleton file */
-    char skelPath[MAX_PATH_LENGTH];
-    const char *skelFileName = "indi_eqmod_sk.xml";
-    snprintf(skelPath, MAX_PATH_LENGTH, "%s/%s", INDI_DATA_DIR, skelFileName);
-    struct stat st;
-    
-    char *skel = getenv("INDISKEL");
-    if (skel) 
-      buildSkeleton(skel);
-    else if (stat(skelPath,&st) == 0) 
-      buildSkeleton(skelPath);
-    else 
-      IDLog("No skeleton file was specified. Set environment variable INDISKEL to the skeleton path and try again.\n"); 
-    
-    GuideRateNP=getNumber("GUIDE_RATE");
-    GuideRateN=GuideRateNP->np;
-    
-    MountInformationTP=getText("MOUNTINFORMATION");
-    SteppersNP=getNumber("STEPPERS");
-    PeriodsNP=getNumber("PERIODS");
-    DateNP=getNumber("DATE");
-    RAStatusLP=getLight("RASTATUS");
-    DEStatusLP=getLight("DESTATUS");
-    SlewSpeedsNP=getNumber("SLEWSPEEDS");
-    HemisphereSP=getSwitch("HEMISPHERE");
-    PierSideSP=getSwitch("PIERSIDE");
-    TrackModeSP=getSwitch("TRACKMODE");
-    TrackRatesNP=getNumber("TRACKRATES");
-    //AbortMotionSP=getSwitch("TELESCOPE_ABORT_MOTION");
-    HorizontalCoordsNP=getNumber("HORIZONTAL_COORDS");
 
     //if (!align->initProperties()) return false;
 
@@ -214,41 +183,6 @@ void EQMod::ISGetProperties (const char *dev)
     /* First we let our parent populate */
     INDI::Telescope::ISGetProperties(dev);
     //IDMessage(dev,"ISGetProperties: connected=%d %s", (isConnected()?1:0), dev);
-    if(isConnected())
-    {
-      defineNumber(&GuideNSP);
-      defineNumber(&GuideEWP);
-      defineNumber(SlewSpeedsNP);
-      defineNumber(GuideRateNP);
-      defineText(MountInformationTP);
-      defineNumber(SteppersNP);
-      defineNumber(PeriodsNP);
-      defineNumber(DateNP);
-      defineLight(RAStatusLP);
-      defineLight(DEStatusLP);
-      defineSwitch(HemisphereSP);
-      defineSwitch(TrackModeSP);
-      defineNumber(TrackRatesNP);
-      defineNumber(HorizontalCoordsNP);
-      defineSwitch(PierSideSP);
-      //defineSwitch(AbortMotionSP);
-      /* }  else {
-      deleteProperty(GuideRateNP->name);
-      deleteProperty(MountInformationTP->name);
-      deleteProperty(SteppersNP->name);
-      deleteProperty(PeriodsNP->name);
-      deleteProperty(DateNP->name);
-      deleteProperty(RAStatusLP->name);
-      deleteProperty(DEStatusLP->name);
-      deleteProperty(SlewSpeedsNP->name);
-      deleteProperty(HemisphereSP->name);
-      deleteProperty(TrackModeSP->name);
-      deleteProperty(TrackRatesNP->name);
-      deleteProperty(HorizontalCoordsNP->name);
-      deleteProperty(PierSideSP->name);
-      //deleteProperty(AbortMotionSP->name);     
-      */
-      }
 
     //align->ISGetProperties(dev);
     return;
@@ -259,43 +193,111 @@ bool EQMod::updateProperties()
     INDI::Telescope::updateProperties();
     //IDMessage(this->getDeviceName(),"updateProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
     if (isConnected())
-    {
-      defineNumber(&GuideNSP);
-      defineNumber(&GuideEWP);
-      defineNumber(SlewSpeedsNP);
-      defineNumber(GuideRateNP);
-      defineText(MountInformationTP);
-      defineNumber(SteppersNP);
-      defineNumber(PeriodsNP);
-      defineNumber(DateNP);
-      defineLight(RAStatusLP);
-      defineLight(DEStatusLP);
-      defineSwitch(HemisphereSP);
-      defineSwitch(TrackModeSP);
-      defineNumber(TrackRatesNP);
-      defineNumber(HorizontalCoordsNP);
-      defineSwitch(PierSideSP);
-      //defineSwitch(AbortMotionSP);
-    }
+      {
+	char skelPath[MAX_PATH_LENGTH];
+	const char *skelFileName = "indi_eqmod_sk.xml";
+	snprintf(skelPath, MAX_PATH_LENGTH, "%s/%s", INDI_DATA_DIR, skelFileName);
+	struct stat st;
+	unsigned int i;
+	INumber *latitude=IUFindNumber(&LocationNV, "LAT");
+	
+	char *skel = getenv("INDISKEL");
+	if (skel) 
+	  buildSkeleton(skel);
+	else if (stat(skelPath,&st) == 0) 
+	  buildSkeleton(skelPath);
+	else 
+	  IDLog("No skeleton file was specified. Set environment variable INDISKEL to the skeleton path and try again.\n"); 
+	
+	GuideRateNP=getNumber("GUIDE_RATE");
+	GuideRateN=GuideRateNP->np;
+	
+	MountInformationTP=getText("MOUNTINFORMATION");
+	SteppersNP=getNumber("STEPPERS");
+	PeriodsNP=getNumber("PERIODS");
+	DateNP=getNumber("DATE");
+	RAStatusLP=getLight("RASTATUS");
+	DEStatusLP=getLight("DESTATUS");
+	SlewSpeedsNP=getNumber("SLEWSPEEDS");
+	HemisphereSP=getSwitch("HEMISPHERE");
+	PierSideSP=getSwitch("PIERSIDE");
+	TrackModeSP=getSwitch("TRACKMODE");
+	TrackRatesNP=getNumber("TRACKRATES");
+	//AbortMotionSP=getSwitch("TELESCOPE_ABORT_MOTION");
+	HorizontalCoordsNP=getNumber("HORIZONTAL_COORDS");
+	defineNumber(&GuideNSP);
+	defineNumber(&GuideEWP);
+	defineNumber(SlewSpeedsNP);
+	defineNumber(GuideRateNP);
+	defineText(MountInformationTP);
+	defineNumber(SteppersNP);
+	defineNumber(PeriodsNP);
+	defineNumber(DateNP);
+	defineLight(RAStatusLP);
+	defineLight(DEStatusLP);
+	defineSwitch(HemisphereSP);
+	defineSwitch(TrackModeSP);
+	defineNumber(TrackRatesNP);
+	defineNumber(HorizontalCoordsNP);
+	defineSwitch(PierSideSP);
+	//defineSwitch(AbortMotionSP);
+	try {
+	  mount->InquireBoardVersion(MountInformationTP);
+	}   
+	catch(EQModError e) {
+	  IDMessage(DEVICE_NAME, "%s", e.message);
+	  Disconnect();
+	  return false;
+	}
+	if (isDebug()) {
+	  for (i=0;i<MountInformationTP->ntp;i++) 
+	    IDLog("Got Board Property %s: %s\n", MountInformationTP->tp[i].name, MountInformationTP->tp[i].text);
+	}
+	
+	mount->InquireRAEncoderInfo(SteppersNP);
+	mount->InquireDEEncoderInfo(SteppersNP);
+	if (isDebug()) {
+	  for (i=0;i<SteppersNP->nnp;i++) 
+	    IDLog("Got Encoder Property %s: %g\n", SteppersNP->np[i].label, SteppersNP->np[i].value);
+	}
+	
+	mount->Init(&ParkSV);
+	
+	zeroRAEncoder=mount->GetRAEncoderZero();
+	totalRAEncoder=mount->GetRAEncoderTotal();
+	zeroDEEncoder=mount->GetDEEncoderZero();
+	totalDEEncoder=mount->GetDEEncoderTotal();
+	
+	if ((latitude) && (latitude->value < 0.0)) SetSouthernHemisphere(true);
+	else  SetSouthernHemisphere(false);
+	
+	if (ParkSV.sp[0].s==ISS_ON) {
+	  //TODO unpark mount if desired
+	}
+	
+	//TODO start tracking ? 
+	TrackState=SCOPE_IDLE;
+	
+      }
     else
-    {
-      deleteProperty(GuideNSP.name);
-      deleteProperty(GuideEWP.name);
-      deleteProperty(GuideRateNP->name);
-      deleteProperty(MountInformationTP->name);
-      deleteProperty(SteppersNP->name);
-      deleteProperty(PeriodsNP->name);
-      deleteProperty(DateNP->name);
-      deleteProperty(RAStatusLP->name);
-      deleteProperty(DEStatusLP->name);
-      deleteProperty(SlewSpeedsNP->name);
-      deleteProperty(HemisphereSP->name);
-      deleteProperty(TrackModeSP->name);
-      deleteProperty(TrackRatesNP->name);
-      deleteProperty(HorizontalCoordsNP->name);
-      deleteProperty(PierSideSP->name);
-      //deleteProperty(AbortMotionSP->name);
-    }
+      {
+	deleteProperty(GuideNSP.name);
+	deleteProperty(GuideEWP.name);
+	deleteProperty(GuideRateNP->name);
+	deleteProperty(MountInformationTP->name);
+	deleteProperty(SteppersNP->name);
+	deleteProperty(PeriodsNP->name);
+	deleteProperty(DateNP->name);
+	deleteProperty(RAStatusLP->name);
+	deleteProperty(DEStatusLP->name);
+	deleteProperty(SlewSpeedsNP->name);
+	deleteProperty(HemisphereSP->name);
+	deleteProperty(TrackModeSP->name);
+	deleteProperty(TrackRatesNP->name);
+	deleteProperty(HorizontalCoordsNP->name);
+	deleteProperty(PierSideSP->name);
+	//deleteProperty(AbortMotionSP->name);
+      }
     //if (!align->updateProperties()) return false;
     return true;
 }
@@ -327,36 +329,7 @@ bool EQMod::Connect(char *port)
   }
   try {
     mount->Connect(port);
-
-    mount->InquireBoardVersion(MountInformationTP);
-    if (isDebug()) {
-      for (i=0;i<MountInformationTP->ntp;i++) 
-	IDLog("Got Board Property %s: %s\n", MountInformationTP->tp[i].name, MountInformationTP->tp[i].text);
-    }
-
-    mount->InquireRAEncoderInfo(SteppersNP);
-    mount->InquireDEEncoderInfo(SteppersNP);
-    if (isDebug()) {
-      for (i=0;i<SteppersNP->nnp;i++) 
-	IDLog("Got Encoder Property %s: %g\n", SteppersNP->np[i].label, SteppersNP->np[i].value);
-    }
-
-    mount->Init(&ParkSV);
-    
-    zeroRAEncoder=mount->GetRAEncoderZero();
-    totalRAEncoder=mount->GetRAEncoderTotal();
-    zeroDEEncoder=mount->GetDEEncoderZero();
-    totalDEEncoder=mount->GetDEEncoderTotal();
-
-    if ((latitude) && (latitude->value < 0.0)) SetSouthernHemisphere(true);
-    else  SetSouthernHemisphere(false);
- 
-   if (ParkSV.sp[0].s==ISS_ON) {
-      //TODO unpark mount if desired
-    }
-
-    //TODO start tracking ? 
-   TrackState=SCOPE_IDLE;
+    // Mount initialisation is in updateProperties as it sets directly Indi properties which should be defined 
   }
   catch(EQModError e) {
     IDMessage(DEVICE_NAME, "%s", e.message);
@@ -847,7 +820,7 @@ bool EQMod::Goto(double r,double d)
     RememberTrackState = TrackState;
     TrackState = SCOPE_SLEWING;
 
-    EqReqNV.s = IPS_BUSY;
+    //EqReqNV.s = IPS_BUSY;
     EqNV.s    = IPS_BUSY;
 
     TrackModeSP->s=IPS_IDLE;
@@ -859,7 +832,7 @@ bool EQMod::Goto(double r,double d)
 
 bool EQMod::canSync()
 {
-  return false;
+  return true;
 }
 
 bool EQMod::canPark()
@@ -883,8 +856,10 @@ bool EQMod::Sync(double ra,double dec)
   double lst=ln_get_mean_sidereal_time(juliandate);
 
   if (TrackState != SCOPE_TRACKING) {
-    EqReqNV.s=IPS_IDLE;
-    IDSetNumber(&EqReqNV, NULL);
+    //EqReqNV.s=IPS_IDLE;
+    EqNV.s=IPS_IDLE;
+    //IDSetNumber(&EqReqNV, NULL);
+    IDSetNumber(&EqNV, NULL);
     IDMessage(getDeviceName(),"Syncs are allowed only when Tracking");
     return false;
   }
@@ -902,8 +877,9 @@ bool EQMod::Sync(double ra,double dec)
   }
   syncdata.deltaRA = syncdata.targetRA - syncdata.telescopeRA;
   syncdata.deltaDEC= syncdata.targetDEC - syncdata.telescopeDEC;
-  EqReqNV.s=IPS_IDLE;
-  IDSetNumber(&EqReqNV, NULL);
+  //EqReqNV.s=IPS_IDLE;
+  //EqNV.s=IPS_OK;
+  //IDSetNumber(&EqReqNV, NULL);
   if (align) align->AlignSync(syncdata.lst, syncdata.jd, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
   IDMessage(getDeviceName(),"Mount Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
   return true;
@@ -1253,7 +1229,7 @@ bool EQMod::Abort()
 {
   mount->StopRA();
   mount->StopDE();
-  INDI::Telescope::Abort();
+  //INDI::Telescope::Abort();
   // Reset switches
   GuideNSP.s = IPS_IDLE;
   IDSetNumber(&GuideNSP, NULL);
@@ -1284,12 +1260,12 @@ bool EQMod::Abort()
       IDSetSwitch(&ParkSV, NULL);
     }
   
-  if (EqReqNV.s == IPS_BUSY)
+  /*if (EqReqNV.s == IPS_BUSY)
     {
       EqReqNV.s      = IPS_IDLE;
       IDSetNumber(&EqReqNV, NULL);
     }
-  
+  */
   if (EqNV.s == IPS_BUSY)
     {
       EqNV.s = IPS_IDLE;

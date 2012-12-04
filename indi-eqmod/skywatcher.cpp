@@ -55,6 +55,7 @@ Skywatcher::~Skywatcher(void)
 bool Skywatcher::Connect(char *port)  throw (EQModError)
 {   
   int err_code = 0;
+  unsigned long tmpMCVersion=0;
   if ((err_code=tty_connect(port, 9600, 8, 0, 1, &fd)) != TTY_OK)
     {
       char ttyerrormsg[ERROR_MSG_LENGTH];
@@ -64,7 +65,20 @@ bool Skywatcher::Connect(char *port)  throw (EQModError)
       return false;
     }
     
-    return true;
+  dispatch_command(InquireMotorBoardVersion, Axis1, NULL);
+  read_eqmod();
+  tmpMCVersion=Revu24str2long(response+1);
+  MCVersion = ((tmpMCVersion & 0xFF) << 16) | ((tmpMCVersion & 0xFF00)) | ((tmpMCVersion & 0xFF0000) >> 16);
+  MountCode=MCVersion & 0xFF;
+  /* Check supported mounts here */
+  if ((MountCode == 0x80) || (MountCode == 0x81) /*|| (MountCode == 0x82)*/ || (MountCode == 0x90)) {
+    
+    throw EQModError(EQModError::ErrDisconnect, "Mount not supported: mount code 0x%x (0x80=GT, 0x81=MF, 0x82=114GT, 0x90=DOB)", 
+		     MountCode);
+    return false;
+  }
+
+  return true;
 }
 
 
@@ -218,19 +232,20 @@ void Skywatcher::Init(ISwitchVectorProperty *parkSP) throw (EQModError)
 
 }
 
-void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP) throw (EQModError) 
+void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP) throw (EQModError)
 {
   unsigned long tmpMCVersion=0;
   unsigned nprop=0;
   char *boardinfo[2];
   const char *boardinfopropnames[]={"MOUNT_TYPE", "MOTOR_CONTROLLER"};
 
+  /*
   dispatch_command(InquireMotorBoardVersion, Axis1, NULL);
   read_eqmod();
   tmpMCVersion=Revu24str2long(response+1);
   MCVersion = ((tmpMCVersion & 0xFF) << 16) | ((tmpMCVersion & 0xFF00)) | ((tmpMCVersion & 0xFF0000) >> 16);
   MountCode=MCVersion & 0xFF;
-
+  */
   nprop=2;
   //  strcpy(boardinfopropnames[0],"MOUNT_TYPE");
   boardinfo[0]=(char *) malloc(20*sizeof(char));
@@ -254,12 +269,12 @@ void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP) throw (EQModE
   IUUpdateText(boardTP, boardinfo, (char **)boardinfopropnames, nprop);
   IDSetText(boardTP,NULL);
   /* Check supported mounts here */
-  if ((MountCode == 0x80) || (MountCode == 0x81) || (MountCode == 0x82) || (MountCode == 0x90)) {
+  /*if ((MountCode == 0x80) || (MountCode == 0x81) || (MountCode == 0x82) || (MountCode == 0x90)) {
     
     throw EQModError(EQModError::ErrDisconnect, "Mount not supported %s (mount code %d)", 
 		     boardinfo[0], MountCode);
   }
-
+  */
   free(boardinfo[0]); free(boardinfo[1]); 
 }
 
