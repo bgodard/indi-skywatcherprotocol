@@ -59,9 +59,9 @@ public:
   virtual bool ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n);
 
   virtual void Init();
-  virtual void GetAlignedCoords(double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
-  virtual void AlignNStar(double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
-  virtual void AlignNearest(double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
+  virtual void GetAlignedCoords(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
+  virtual void AlignNStar(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
+  virtual void AlignNearest(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
   virtual void AlignGoto(double *gotoRA, double *gotoDEC);
   virtual void AlignSync(double lst, double jd, double targetRA, double targetDEC, double telescopeRA, double telescopeDEC);
 };

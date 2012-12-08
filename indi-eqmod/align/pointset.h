@@ -19,6 +19,7 @@
 #define POINTSET_H
 
 #include <map>
+#include <set>
 
 #include "htm.h"
 #include <lilxml.h>
@@ -40,20 +41,30 @@ class PointSet
     double celestialALT, celestialAZ, telescopeALT, telescopeAZ;
     AlignData aligndata;
   } Point;
-
+  typedef struct Distance {
+    HtmID htmID;
+    double value;
+  } Distance;
+  typedef enum PointFilter {
+    None, SameQuadrant
+  } PointFilter;
   void AddPoint(AlignData aligndata);
+  Point *getPoint(HtmID htmid);
   void Init();
   void Reset();
   char *LoadDataFile(const char *filename);
+  std::set<Distance, bool (*)(Distance, Distance)> *ComputeDistances(double alt, double az, PointFilter filter);
+  double lat, lon, alt;
+  double range24(double r);
 
  protected:
  private:
 
   XMLEle *PointSetXmlRoot;
   std::map<HtmID, Point> *PointSetMap;
-  double lat, lon, alt;
+
  
-  double range24(double r);
+
 
 };
 #endif
