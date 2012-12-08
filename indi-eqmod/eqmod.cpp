@@ -775,6 +775,12 @@ double EQMod::GetDETrackRate()
 
 bool EQMod::Goto(double r,double d)
 {
+  double juliandate=ln_get_julian_from_sys();
+  double lst=ln_get_mean_sidereal_time(juliandate);
+
+  lst+=(IUFindNumber(&LocationNV, "LONG")->value /15.0); // add longitude ha of observer
+  lst=range24(lst);
+
     //IDLog("EQMod Goto\n");
     targetRA=r;
     targetDEC=d;
@@ -784,7 +790,7 @@ bool EQMod::Goto(double r,double d)
     bzero(&gotoparams, sizeof(gotoparams));
     gotoparams.ratarget = r;  gotoparams.detarget = d;
     if (align) 
-      align->AlignGoto(&gotoparams.ratarget, &gotoparams.detarget);
+      align->AlignGoto(lst, &gotoparams.ratarget, &gotoparams.detarget);
     else {
       if (syncdata.lst != 0.0) {
 	gotoparams.ratarget -= syncdata.deltaRA;

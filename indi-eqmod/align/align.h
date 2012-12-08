@@ -60,9 +60,9 @@ public:
 
   virtual void Init();
   virtual void GetAlignedCoords(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
-  virtual void AlignNStar(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
-  virtual void AlignNearest(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC);
-  virtual void AlignGoto(double *gotoRA, double *gotoDEC);
+  virtual void AlignNStar(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC, bool ingoto);
+  virtual void AlignNearest(double lst, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC, bool ingoto);
+  virtual void AlignGoto(double lst, double *gotoRA, double *gotoDEC);
   virtual void AlignSync(double lst, double jd, double targetRA, double targetDEC, double telescopeRA, double telescopeDEC);
 };
 
