@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wordexp.h>
+#include <math.h>
 
 /* For IDLog/Debug */
 #include <indidevapi.h>
@@ -33,12 +34,48 @@ double PointSet::range24(double r) {
   return res;
 }
 
+
 /*
 void PointSet::AltAzFromRaDec(double ra, double dec, double lst, double *alt, double *az) 
 {
 
 }
 */
+ /* Using haversine: http://en.wikipedia.org/wiki/Haversine_formula */
+double sphere_unit_distance(double theta1, double theta2, double phi1, double phi2) {
+  double sqrt_haversin_lat = sin(((phi2 - phi1) / 2) * (M_PI / 180));
+  double sqrt_haversin_long = sin(((theta2 - theta1) / 2) * (M_PI / 180));
+  return (2 * asin(sqrt((sqrt_haversin_lat * sqrt_haversin_lat) +
+			cos(phi1 * (M_PI / 180))*cos(phi2 * (M_PI / 180))*(sqrt_haversin_long * sqrt_haversin_long))));
+}
+
+bool compelt(PointSet::Distance d1, PointSet::Distance d2) {
+  return d1.value < d2.value;
+}
+
+std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *PointSet::ComputeDistances(double alt, double az, PointFilter filter) {
+  std::map<HtmID, Point>::iterator it;
+  std::set<Distance, bool (*)(Distance, Distance)> *distances = new std::set<Distance, bool (*)(Distance, Distance)>(compelt);
+  std::set<Distance>::iterator distit;
+  std::pair<std::set<Distance>::iterator, bool> ret;
+  /* IDLog("Compute distances for point alt=%f az=%f\n", alt, az);*/
+  for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
+    double d = sphere_unit_distance(az, (*it).second.celestialAZ, alt, (*it).second.celestialALT);
+    Distance elt;
+    elt.htmID=(*it).first;
+    elt.value=d;
+    ret=distances->insert(elt);
+    /*IDLog("  Point %lld (alt=%f az=%f): distance %f \n",  elt.htmID, (*it).second.celestialALT, (*it).second.celestialAZ, elt.value);*/
+  }
+  /*
+  IDLog("  Ordered distances for point alt=%f az=%f\n", alt, az);
+  for ( distit=distances->begin() ; distit != distances->end(); distit++ ) {
+    IDLog("  Point %lld: distance %f \n",  distit->htmID, distit->value);
+  }
+  */
+  return distances;
+}
+
 void PointSet::AddPoint(AlignData aligndata) 
 {
 
@@ -51,7 +88,11 @@ void PointSet::AddPoint(AlignData aligndata)
   point.htmID=cc_radec2ID(point.celestialAZ, point.aligndata.targetDEC, 19);
   cc_ID2name(point.htmname,  point.htmID);
   PointSetMap->insert(std::pair<HtmID, Point>(point.htmID, point));
-  IDLog("Adding sync point id = %lld name = %s\n ", point.htmID, point.htmname);
+  /*IDLog("Adding sync point id = %lld name = %s\n ", point.htmID, point.htmname);*/
+}
+
+PointSet::Point *PointSet::getPoint(HtmID htmid) {
+  return &(PointSetMap->find(htmid)->second);
 }
 
 void PointSet::Init()
@@ -132,7 +173,7 @@ char *PointSet::LoadDataFile(const char *filename)
   }
   IDLog("Resulting Alignment map;\n");
   for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ )
-    IDLog("  Point %lld: %f %f\n",  (*it).first, (*it).second.celestialAZ,  (*it).second.aligndata.targetDEC);
+    IDLog("  Point htmID= %lld: telescope alt = %f az = %f\n",  (*it).first, (*it).second.telescopeALT,  (*it).second.telescopeAZ);
 
   return NULL;
 }

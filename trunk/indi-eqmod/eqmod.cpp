@@ -142,7 +142,7 @@ EQMod::EQMod()
   RAInverted = DEInverted = false;
   bzero(&syncdata, sizeof(syncdata));
 
-  //align=new Align(this);
+  align=new Align(this);
   /* initialize random seed: */
   srand ( time(NULL) );
 }
@@ -167,7 +167,7 @@ bool EQMod::initProperties()
 
     //IDLog("initProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
 
-    //if (!align->initProperties()) return false;
+    if (!align->initProperties()) return false;
 
     INDI::GuiderInterface::initGuiderProperties(this->getDeviceName(), MOTION_TAB);
 
@@ -184,7 +184,7 @@ void EQMod::ISGetProperties (const char *dev)
     INDI::Telescope::ISGetProperties(dev);
     //IDMessage(dev,"ISGetProperties: connected=%d %s", (isConnected()?1:0), dev);
 
-    //align->ISGetProperties(dev);
+    align->ISGetProperties(dev);
     return;
 }
 
@@ -298,7 +298,8 @@ bool EQMod::updateProperties()
 	deleteProperty(PierSideSP->name);
 	//deleteProperty(AbortMotionSP->name);
       }
-    //if (!align->updateProperties()) return false;
+    if (!align->updateProperties()) return false;
+
     return true;
 }
 
@@ -337,7 +338,7 @@ bool EQMod::Connect(char *port)
     return false;
   }
 
-  //if (align) align->Init();
+  //  if (align) align->Init();
   IDMessage(DEVICE_NAME, "Successfully connected to EQMod Mount.");
   return true;
 }
@@ -420,7 +421,7 @@ bool EQMod::ReadScopeStatus() {
     EncodersToRADec(currentRAEncoder, currentDEEncoder, lst, &currentRA, &currentDEC, &currentHA);
     alignedRA=currentRA; alignedDEC=currentDEC;
     if (align) 
-      align->GetAlignedCoords(currentRA, currentDEC, &alignedRA, &alignedDEC);
+      align->GetAlignedCoords(lst, currentRA, currentDEC, &alignedRA, &alignedDEC);
     else {
       if (syncdata.lst != 0.0) {
 	alignedRA += syncdata.deltaRA;
@@ -1029,6 +1030,9 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
       
     }
   
+
+    if (align) align->ISNewNumber(dev,name,values,names,n);
+
     //  if we didn't process it, continue up the chain, let somebody else
     //  give it a shot
     return INDI::Telescope::ISNewNumber(dev,name,values,names,n);
@@ -1088,6 +1092,7 @@ bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	}
     }
 
+    if (align) align->ISNewSwitch(dev,name,states,names,n);
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev,name,states,names,n);
 }
