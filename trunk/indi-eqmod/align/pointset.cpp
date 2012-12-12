@@ -21,6 +21,7 @@
 #include <string.h>
 #include <wordexp.h>
 #include <math.h>
+#include <time.h>
 
 /* For IDLog/Debug */
 #include <indidevapi.h>
@@ -52,6 +53,12 @@ double sphere_unit_distance(double theta1, double theta2, double phi1, double ph
 bool compelt(PointSet::Distance d1, PointSet::Distance d2) {
   return d1.value < d2.value;
 }
+
+PointSet::PointSet(INDI::Telescope *t) 
+{
+  telescope=t;
+}
+
 
 std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *PointSet::ComputeDistances(double alt, double az, PointFilter filter) {
   std::map<HtmID, Point>::iterator it;
@@ -87,8 +94,10 @@ void PointSet::AddPoint(AlignData aligndata)
   point.telescopeALT = point.aligndata.telescopeDEC + lat;
   point.htmID=cc_radec2ID(point.celestialAZ, point.aligndata.targetDEC, 19);
   cc_ID2name(point.htmname,  point.htmID);
+  IDLog("Adding sync point id = %lld name = %s\n ", point.htmID, point.htmname);
   PointSetMap->insert(std::pair<HtmID, Point>(point.htmID, point));
-  /*IDLog("Adding sync point id = %lld name = %s\n ", point.htmID, point.htmname);*/
+  IDLog("       sync point celestial alt = %g az = %g\n ", point.celestialALT, point.celestialAZ);
+  IDLog("       sync point telescope alt = %g az = %g\n ", point.telescopeALT, point.telescopeAZ);
 }
 
 PointSet::Point *PointSet::getPoint(HtmID htmid) {
@@ -97,7 +106,8 @@ PointSet::Point *PointSet::getPoint(HtmID htmid) {
 
 void PointSet::Init()
 {
-  PointSetMap=NULL;
+  //  PointSetMap=NULL;
+  PointSetMap = new std::map<HtmID, Point>();
   PointSetXmlRoot=NULL;
 }
 
@@ -105,9 +115,9 @@ void PointSet::Reset()
 {
   if (PointSetMap) {
     PointSetMap->clear();
-    delete(PointSetMap);
+    //delete(PointSetMap);
   }
-  PointSetMap=NULL;
+  //PointSetMap=NULL;
   if (PointSetXmlRoot)
     delXMLEle(PointSetXmlRoot);
   PointSetXmlRoot=NULL;
@@ -137,6 +147,8 @@ char *PointSet::LoadDataFile(const char *filename)
   }
   wordfree(&wexp);
   lp = newLilXML();
+  if (PointSetXmlRoot)
+    delXMLEle(PointSetXmlRoot);
   PointSetXmlRoot = readXMLFile(fp, lp, errmsg);
   delLilXML(lp);
   if (!PointSetXmlRoot) return errmsg;
@@ -157,7 +169,8 @@ char *PointSet::LoadDataFile(const char *filename)
   else sscanf(valuXMLAtt(ap), "%lf", &alt);
   IDLog("Align Data for site %s (lon %f lat %f alt %f)\n", sitename, lon, lat, alt);
   IDLog("  number of points: %d\n", nXMLEle(sitexml));
-  PointSetMap = new std::map<HtmID, Point>();
+  //  PointSetMap = new std::map<HtmID, Point>();
+  PointSetMap->clear();
   alignxml=nextXMLEle(sitexml, 1);
   while (alignxml) {
     //IDLog("synctime %s\n", pcdataXMLEle(findXMLEle(alignxml, "synctime")));
@@ -173,7 +186,76 @@ char *PointSet::LoadDataFile(const char *filename)
   }
   IDLog("Resulting Alignment map;\n");
   for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ )
-    IDLog("  Point htmID= %lld: telescope alt = %f az = %f\n",  (*it).first, (*it).second.telescopeALT,  (*it).second.telescopeAZ);
+    IDLog("  Point htmID= %lld, htm name = %s,  telescope alt = %f az = %f\n",  (*it).first, (*it).second.htmname, 
+	  (*it).second.telescopeALT,  (*it).second.telescopeAZ);
 
   return NULL;
+}
+
+char *PointSet::WriteDataFile(const char *filename)
+{
+  wordexp_t wexp;
+  FILE *fp;
+  static char errmsg[512];
+  AlignData aligndata;
+  XMLEle *root, *alignxml, *sitexml;
+  XMLAtt *ap;
+  char sitename[26];
+  char sitedata[26];
+  std::map<HtmID, Point>::iterator it;
+  time_t tnow;
+  struct tm tm_now;
+
+  
+
+  if (wordexp(filename, &wexp, 0)) {
+    wordfree(&wexp);
+    return (char *)("Badly formed filename");
+  }
+  //if (filename == NULL) return;
+  if (!(fp=fopen(wexp.we_wordv[0], "w"))) {
+    wordfree(&wexp);
+    return strerror(errno);
+  }
+  root = addXMLEle(NULL, "aligndata");
+  sitexml=addXMLEle(root, "site");
+  
+  tnow=time(NULL);
+  localtime_r(&tnow, &tm_now);
+  strftime(sitename, sizeof(sitename), "%F@%T", &tm_now);
+  addXMLAtt(sitexml, "name", sitename);
+  
+  snprintf(sitedata, sizeof(sitedata), "%g", IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value);
+  addXMLAtt(sitexml, "lon", sitedata);  
+
+  snprintf(sitedata, sizeof(sitedata), "%g", IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value);
+  addXMLAtt(sitexml, "lat", sitedata);
+  
+  for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
+    XMLEle *data;
+    char pcdata[30];
+    aligndata=(*it).second.aligndata;
+    alignxml=addXMLEle(sitexml, "point");
+    data=addXMLEle(alignxml, "synctime");
+    snprintf(pcdata, sizeof(pcdata), "%g", aligndata.lst);
+    editXMLEle(data, pcdata);
+    data=addXMLEle(alignxml, "celestialra");
+    snprintf(pcdata, sizeof(pcdata), "%g", aligndata.targetRA);
+    editXMLEle(data, pcdata);
+    data=addXMLEle(alignxml, "celestialde");
+    snprintf(pcdata, sizeof(pcdata), "%g", aligndata.targetDEC);
+    editXMLEle(data, pcdata);
+    data=addXMLEle(alignxml, "telescopera");
+    snprintf(pcdata, sizeof(pcdata), "%g", aligndata.telescopeRA);
+    editXMLEle(data, pcdata);
+    data=addXMLEle(alignxml, "telescopede");
+    snprintf(pcdata, sizeof(pcdata), "%g", aligndata.telescopeDEC);
+    editXMLEle(data, pcdata);
+    
+  }
+  
+  prXMLEle(fp, root, 0);
+  fclose(fp);
+  return NULL;
+  
 }
