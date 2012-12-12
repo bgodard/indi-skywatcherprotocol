@@ -24,6 +24,9 @@
 #include "htm.h"
 #include <lilxml.h>
 
+// to get access to lat/long data
+#include <inditelescope.h>
+
 typedef struct AlignData {
   double lst;
   double jd;
@@ -48,11 +51,13 @@ class PointSet
   typedef enum PointFilter {
     None, SameQuadrant
   } PointFilter;
+  PointSet(INDI::Telescope *);
   void AddPoint(AlignData aligndata);
   Point *getPoint(HtmID htmid);
   void Init();
   void Reset();
   char *LoadDataFile(const char *filename);
+  char *WriteDataFile(const char *filename);
   std::set<Distance, bool (*)(Distance, Distance)> *ComputeDistances(double alt, double az, PointFilter filter);
   double lat, lon, alt;
   double range24(double r);
@@ -63,7 +68,8 @@ class PointSet
   XMLEle *PointSetXmlRoot;
   std::map<HtmID, Point> *PointSetMap;
 
- 
+  // to get access to lat/long data
+  INDI::Telescope *telescope;
 
 
 };

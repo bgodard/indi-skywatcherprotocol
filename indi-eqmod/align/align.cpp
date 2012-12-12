@@ -76,7 +76,7 @@ void mult_matrix_3x3(double in1[3][3], double in2[3][3], double out[3][3]) {
 Align::Align(INDI::Telescope *t) 
 {
   telescope=t;
-  pointset=new PointSet();
+  pointset=new PointSet(t);
 }
 
 Align::~Align() 
@@ -207,7 +207,7 @@ void Align::AlignNStar(double lst, double currentRA, double currentDEC, double *
   sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None);
   if (sortedpoints->size() < 2) {
     //IDLog("AlignNstar: only %d points in set - using Nearest mode\n", sortedpoints->size());
-    AlignNearest(lst, currentRA, currentDEC, alignedRA, alignedDEC, true);
+    AlignNearest(lst, currentRA, currentDEC, alignedRA, alignedDEC, ingoto);
   } else {
     /* Taki's Algorithm (p33): http://www.geocities.jp/toshimi_taki/matrix/matrix_method_rev_e.pdf */
     std::set<PointSet::Distance>::iterator it = sortedpoints->begin();
@@ -222,16 +222,16 @@ void Align::AlignNStar(double lst, double currentRA, double currentDEC, double *
     int max=(sortedpoints->size() == 2)?2:3;
 
     for (int i=0; i < max; i++) {
-      //IDLog("Align NStar: point %d htmID = %lld, alt=%g az=%g\n", i, it->htmID, point->telescopeALT, point->telescopeAZ);
+      IDLog("Align NStar: align point %d htm = %s, telescope alt=%g az=%g\n", i, point->htmname, point->telescopeALT, point->telescopeAZ);
       celestialMatrix[0][i]=cos(point->aligndata.targetDEC * M_PI / 180.0) * 
-	cos(((pointset->range24(point->aligndata.targetRA - (lst - point->aligndata.lst)) * 360) / 24.0) * M_PI / 180.0); 
+	cos(((pointset->range24(point->aligndata.targetRA - point->aligndata.lst) * 360) / 24.0) * M_PI / 180.0); 
       celestialMatrix[1][i]=cos(point->aligndata.targetDEC * M_PI / 180.0) * 
-	sin(((pointset->range24(point->aligndata.targetRA - (lst - point->aligndata.lst)) * 360) / 24.0) * M_PI / 180.0); 
+	sin(((pointset->range24(point->aligndata.targetRA - point->aligndata.lst) * 360) / 24.0) * M_PI / 180.0); 
       celestialMatrix[2][i]=sin(point->aligndata.targetDEC * M_PI / 180.0);
       telescopeMatrix[0][i]=cos(point->aligndata.telescopeDEC * M_PI / 180.0) * 
-	cos(((pointset->range24(point->aligndata.telescopeRA - (lst - point->aligndata.lst)) * 360) / 24.0) * M_PI / 180.0);
+	cos(((pointset->range24(point->aligndata.telescopeRA - point->aligndata.lst) * 360) / 24.0) * M_PI / 180.0);
       telescopeMatrix[1][i]=cos(point->aligndata.telescopeDEC * M_PI / 180.0) * 
-	sin(((pointset->range24(point->aligndata.telescopeRA - (lst - point->aligndata.lst)) * 360) / 24.0) * M_PI / 180.0);
+	sin(((pointset->range24(point->aligndata.telescopeRA - point->aligndata.lst) * 360) / 24.0) * M_PI / 180.0);
       telescopeMatrix[2][i]=sin(point->aligndata.telescopeDEC * M_PI / 180.0); 
       it++;
       point = pointset->getPoint(it->htmID);
@@ -241,55 +241,57 @@ void Align::AlignNStar(double lst, double currentRA, double currentDEC, double *
       /* compute vector product of the two points */
       /* and insert it in the set */
       double norm=1.0;
-      celestialMatrix[0][2]=celestialMatrix[1][1] * celestialMatrix[2][2] - celestialMatrix[2][1] * celestialMatrix[1][2];
-      celestialMatrix[1][2]=celestialMatrix[2][1] * celestialMatrix[0][2] - celestialMatrix[0][1] * celestialMatrix[2][2];
-      celestialMatrix[2][2]=celestialMatrix[0][1] * celestialMatrix[1][2] - celestialMatrix[1][1] * celestialMatrix[0][2];
+      celestialMatrix[0][2]=celestialMatrix[1][0] * celestialMatrix[2][1] - celestialMatrix[2][0] * celestialMatrix[1][1];
+      celestialMatrix[1][2]=celestialMatrix[2][0] * celestialMatrix[0][1] - celestialMatrix[0][0] * celestialMatrix[2][1];
+      celestialMatrix[2][2]=celestialMatrix[0][0] * celestialMatrix[1][1] - celestialMatrix[1][0] * celestialMatrix[0][1];
       norm=sqrt(celestialMatrix[0][2]*celestialMatrix[0][2] + celestialMatrix[1][2]*celestialMatrix[1][2] + celestialMatrix[2][2]*celestialMatrix[2][2]);
       celestialMatrix[0][2]=celestialMatrix[0][2]/norm;celestialMatrix[1][2]=celestialMatrix[1][2]/norm;celestialMatrix[2][2]=celestialMatrix[2][2]/norm;
        
-      telescopeMatrix[0][2]=telescopeMatrix[1][1] * telescopeMatrix[2][2] - telescopeMatrix[2][1] * telescopeMatrix[1][2];
-      telescopeMatrix[1][2]=telescopeMatrix[2][1] * telescopeMatrix[0][2] - telescopeMatrix[0][1] * telescopeMatrix[2][2];
-      telescopeMatrix[2][2]=telescopeMatrix[0][1] * telescopeMatrix[1][2] - telescopeMatrix[1][1] * telescopeMatrix[0][2];
+      telescopeMatrix[0][2]=telescopeMatrix[1][0] * telescopeMatrix[2][1] - telescopeMatrix[2][0] * telescopeMatrix[1][1];
+      telescopeMatrix[1][2]=telescopeMatrix[2][0] * telescopeMatrix[0][1] - telescopeMatrix[0][0] * telescopeMatrix[2][1];
+      telescopeMatrix[2][2]=telescopeMatrix[0][0] * telescopeMatrix[1][1] - telescopeMatrix[1][0] * telescopeMatrix[0][1];
       norm=sqrt(telescopeMatrix[0][2]*telescopeMatrix[0][2] + telescopeMatrix[1][2]*telescopeMatrix[1][2] + telescopeMatrix[2][2]*telescopeMatrix[2][2]);
       telescopeMatrix[0][2]=telescopeMatrix[0][2]/norm;telescopeMatrix[1][2]=telescopeMatrix[1][2]/norm;telescopeMatrix[2][2]=telescopeMatrix[2][2]/norm;
       
     } 
-    //MATRIX_LOG("celestialMatrix", celestialMatrix);
-    //MATRIX_LOG("telescopeMatrix", telescopeMatrix);
+    MATRIX_LOG("celestialMatrix", celestialMatrix);
+    MATRIX_LOG("telescopeMatrix", telescopeMatrix);
     inverse_matrix_3x3(celestialMatrix, invcelestialMatrix);
-    //MATRIX_LOG("invcelestialMatrix", invcelestialMatrix);
+    MATRIX_LOG("invcelestialMatrix", invcelestialMatrix);
     mult_matrix_3x3(telescopeMatrix, invcelestialMatrix, T);
     inverse_matrix_3x3(T, invT);
-    //MATRIX_LOG("T", T);
-    //MATRIX_LOG("invT", invT);
+    MATRIX_LOG("T", T);
+    MATRIX_LOG("invT", invT);
     if (!(ingoto)) {
-	l = cos(currentDEC * M_PI / 180.0) * cos(((currentRA * 360) / 24.0) * M_PI / 180.0);
-	m = cos(currentDEC * M_PI / 180.0) * sin(((currentRA * 360) / 24.0) * M_PI / 180.0);
-	n = sin(currentDEC * M_PI / 180.0);
-	L = invT[0][0] * l + invT[0][1] * m + invT[0][2] * n;
-	M = invT[1][0] * l + invT[1][1] * m + invT[1][2] * n;
-	N = invT[2][0] * l + invT[2][1] * m + invT[2][2] * n;
-	
-	*alignedRA = atan(M/L) * 12.0 / M_PI;
-	if (L < 0) *alignedRA += 12.0;
-	if (*alignedRA < 0) *alignedRA = 24.0 - *alignedRA;
-	
-	*alignedDEC = asin(N) * 180.0 / M_PI;
-      } else {
-	L = cos(currentDEC * M_PI / 180.0) * cos(((currentRA * 360) / 24.0) * M_PI / 180.0);
-	M = cos(currentDEC * M_PI / 180.0) * sin(((currentRA * 360) / 24.0) * M_PI / 180.0);
-	N = sin(currentDEC * M_PI / 180.0);
-	l = T[0][0] * L + T[0][1] * M + T[0][2] * N;
-	l = T[1][0] * L + T[1][1] * M + T[1][2] * N;
-	n = T[2][0] * L + T[2][1] * M + T[2][2] * N;
-	
-	*alignedRA = atan(m/l) * 12.0 / M_PI;
-	if (l < 0) *alignedRA += 12.0;
-	if (*alignedRA < 0) *alignedRA = 24.0 - *alignedRA;
-	
-	*alignedDEC = asin(n) * 180.0 / M_PI;	
+      l = cos(currentDEC * M_PI / 180.0) * cos(((pointset->range24(currentRA - lst) * 360) / 24.0) * M_PI / 180.0);
+      m = cos(currentDEC * M_PI / 180.0) * sin(((pointset->range24(currentRA - lst) * 360) / 24.0) * M_PI / 180.0);
+      n = sin(currentDEC * M_PI / 180.0);
+      L = invT[0][0] * l + invT[0][1] * m + invT[0][2] * n;
+      M = invT[1][0] * l + invT[1][1] * m + invT[1][2] * n;
+      N = invT[2][0] * l + invT[2][1] * m + invT[2][2] * n;
+      
+      *alignedRA = atan(M/L) * 12.0 / M_PI;
+      if (L < 0) *alignedRA += 12.0;
+      if (*alignedRA < 0) *alignedRA = 24.0 + *alignedRA;
+      
+      *alignedDEC = asin(N) * 180.0 / M_PI;
 
-      }
+    } else {
+      L = cos(currentDEC * M_PI / 180.0) * cos(((pointset->range24(currentRA - lst) * 360) / 24.0) * M_PI / 180.0);
+      M = cos(currentDEC * M_PI / 180.0) * sin(((pointset->range24(currentRA - lst) * 360) / 24.0) * M_PI / 180.0);
+      N = sin(currentDEC * M_PI / 180.0);
+      l = T[0][0] * L + T[0][1] * M + T[0][2] * N;
+      l = T[1][0] * L + T[1][1] * M + T[1][2] * N;
+      n = T[2][0] * L + T[2][1] * M + T[2][2] * N;
+      
+      *alignedRA = atan(m/l) * 12.0 / M_PI;
+      if (l < 0) *alignedRA += 12.0;
+      if (*alignedRA < 0) *alignedRA = 24.0 + *alignedRA;
+      
+      *alignedDEC = asin(n) * 180.0 / M_PI;	
+      
+    }
+    IDLog("ALign NStar: delta RA = %f, delta DEC = %f\n", (*alignedRA - currentRA), (*alignedDEC - currentDEC));
   }
 }
 
@@ -302,8 +304,11 @@ void Align::AlignNearest(double lst, double currentRA, double currentDEC, double
   if (sortedpoints->empty()) {
     *alignedRA = currentRA;
     *alignedDEC = currentDEC;
+    IDLog("AlignNearest: empty set\n");
   } else {
     PointSet::Point *point = pointset->getPoint(sortedpoints->begin()->htmID);
+    *alignedRA = currentRA;
+    *alignedDEC = currentDEC;
     if (!(ingoto)) {
       *alignedRA += (point->aligndata.targetRA - point->aligndata.telescopeRA);
       *alignedDEC += (point->aligndata.targetDEC - point->aligndata.telescopeDEC);
@@ -311,7 +316,9 @@ void Align::AlignNearest(double lst, double currentRA, double currentDEC, double
       *alignedRA -= (point->aligndata.targetRA - point->aligndata.telescopeRA);
       *alignedDEC -= (point->aligndata.targetDEC - point->aligndata.telescopeDEC);
     }
-    /*IDLog("ALign Nearest: align point alt = %f, az =%f\n", point->telescopeALT, point->telescopeAZ);*/
+    IDLog("ALign Nearest: align point %s telescope alt = %f, az =%f\n", point->htmname, point->telescopeALT, point->telescopeAZ);
+    IDLog("ALign Nearest: delta RA = %c %f, delta DEC = %c %f\n", (ingoto?'-':'+'), (point->aligndata.targetRA - point->aligndata.telescopeRA), 
+	  (ingoto?'-':'+'), (point->aligndata.targetDEC - point->aligndata.telescopeDEC));
   }
 }
 
@@ -347,12 +354,12 @@ void Align::AlignSync(double lst, double jd, double targetRA, double targetDEC, 
   syncdata.lst = lst; syncdata.jd = jd; 
   syncdata.targetRA = targetRA;  syncdata.targetDEC = targetDEC;  
   syncdata.telescopeRA = telescopeRA;  syncdata.telescopeDEC = telescopeDEC;  
-
+  IDLog("AlignSync \n");
   // add point on sync
-  alignsyncsw=IUFindSwitch(AlignModeSP,"ADDONSYNC");
+  alignsyncsw=IUFindSwitch(AlignOptionsSP,"ADDONSYNC");
   if (alignsyncsw->s == ISS_ON) {
     pointset->AddPoint(syncdata);
-    IDLog("Add sync point: %.8f %.8f %.8f %.8f %.8f\n", lst, targetRA, targetDEC, telescopeRA, telescopeDEC);
+    IDLog(" Add sync point: %.8f %.8f %.8f %.8f %.8f\n", lst, targetRA, targetDEC, telescopeRA, telescopeDEC);
   }
   IUUpdateNumber(AlignPointNP, values, (char **)names, 6);
   IDSetNumber(AlignPointNP, NULL);
@@ -439,7 +446,7 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	  AlignModeSP->s=IPS_OK;
 	  IUUpdateSwitch(AlignModeSP,states,names,n);
 	  sw=IUFindOnSwitch(AlignModeSP);
-	  IDSetSwitch(AlignModeSP,"Alignment mode set to %s", sw->name);
+	  IDSetSwitch(AlignModeSP,"Alignment mode set to %s", sw->label);
 	  return true;
 	}
 
@@ -448,6 +455,8 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	  //ISwitch *sw;
 	  AlignOptionsSP->s=IPS_OK;
 	  IUUpdateSwitch(AlignOptionsSP,states,names,n);
+	  for (int i=0; i < n; i++)
+	    IDLog("AlignOptions Switch %s %d\n", names[i], states[i]);
 	  //sw=IUFindOnSwitch(AlignModeSP);
 	  IDSetSwitch(AlignOptionsSP, NULL);
 	  return true;
@@ -458,9 +467,27 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	  IUUpdateSwitch(AlignListSP,states,names,n);
 	  sw=IUFindOnSwitch(AlignListSP);
 	  if (!strcmp(sw->name,"ALIGNLISTADD")) {
+	    pointset->AddPoint(syncdata);
 	    IDMessage(telescope->getDeviceName(), "Align: added point to list");;
 	  } else if (!strcmp(sw->name,"ALIGNLISTCLEAR")) {
+	    pointset->Reset();
 	    IDMessage(telescope->getDeviceName(), "Align: list cleared");;
+	  } else if (!strcmp(sw->name,"ALIGNWRITEFILE")) {
+	    char *res;
+	    res=pointset->WriteDataFile(IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
+	    if (res)
+	       IDMessage(telescope->getDeviceName(), "Can not save Align Data to file %s: %s", 
+			 IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text, res);
+	    else
+	      IDMessage(telescope->getDeviceName(), "Align: Data saved in file %s", IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
+	  } else if (!strcmp(sw->name,"ALIGNLOADFILE")) {
+	    char *res;
+	    res=pointset->LoadDataFile(IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
+	    if (res) 
+	      IDMessage(telescope->getDeviceName(), "Can not load Align Data File %s: %s", 
+			IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text, res);
+	    else
+	      IDMessage(telescope->getDeviceName(), "Align: Data loaded from file %s", IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
 	  }
 
 	  AlignListSP->s=IPS_OK;
@@ -479,7 +506,7 @@ bool Align::ISNewText (const char *dev, const char *name, char *texts[], char *n
     {
       if (AlignDataFileTP && (strcmp(name, AlignDataFileTP->name)==0))
 	{
-	  char *loadres=NULL;
+	  /*	  char *loadres=NULL;
 	  pointset->Reset();
 	  IUUpdateText(AlignDataFileTP,texts,names,n);
 	  loadres=pointset->LoadDataFile(IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
@@ -489,6 +516,9 @@ bool Align::ISNewText (const char *dev, const char *name, char *texts[], char *n
 	    AlignDataFileTP->s=IPS_ALERT;
 	  } else 
 	    AlignDataFileTP->s=IPS_OK;
+	  IDSetText(AlignDataFileTP,NULL);
+	  */
+	  IUUpdateText(AlignDataFileTP,texts,names,n);
 	  IDSetText(AlignDataFileTP,NULL);
 	  return true;
  	}

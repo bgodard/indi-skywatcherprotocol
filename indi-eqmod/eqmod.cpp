@@ -160,6 +160,16 @@ const char * EQMod::getDefaultName()
     return (char *)DEVICE_NAME;
 }
 
+double EQMod::getLongitude() 
+{
+  return(IUFindNumber(&LocationNV, "LONG")->value);
+}
+
+double EQMod::getLatitude() 
+{
+  return(IUFindNumber(&LocationNV, "LAT")->value);
+}
+
 bool EQMod::initProperties()
 {
     /* Make sure to init parent properties first */
@@ -889,6 +899,7 @@ bool EQMod::Sync(double ra,double dec)
   //IDSetNumber(&EqReqNV, NULL);
   if (align) align->AlignSync(syncdata.lst, syncdata.jd, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
   IDMessage(getDeviceName(),"Mount Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
+  IDLog("Mount Synced (deltaRA = %.6f deltaDEC = %.6f)\n", syncdata.deltaRA, syncdata.deltaDEC);
   return true;
 }
 
