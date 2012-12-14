@@ -10,7 +10,14 @@ By default, the mount is aligned with the last sync point you performed after co
 
 *N-Star* alignment mode uses the algorithm described in [http://www.geocities.jp/toshimi_taki/matrix/matrix_method_rev_e.pdf Taki's paper] on page 33. It computes a correction matrix based on at least 2 sync points. Actually the 3 nearest sync points are used here. This is a difference with the alignment mode of the EQMod project, where a triangle of sync points is selected  so that the distance of its center to the target is minimal.
 
-== Detailed steps for using N-Star alignment in Kstars ==
-  # Connect he mount
-  # Set the scope location with the one defined in Kstars: simply press 'Update' in the 'scope location' in the 'Site Management' tab. _Warning: 
-  #    
+== Steps for using N-Star alignment in Kstars ==
+  # Connect he mount.
+  # Set the scope location with the one defined in Kstars: simply press 'Update' in the 'scope location' in the 'Site Management' tab.
+  # Switch to 'No Alignment' in the 'Alignment' tab.
+  # Add sync points:
+    * Track to a star of your choice
+    * Align it in a reticle using 'Move N/S' and 'Move 'E/W' of the motion tab
+    * Use 'Sync' in kstars on the star you choosed to add a sync point 
+    * At least two sync points should be defined (otherwise nearest point is choosen)
+    * You could empty the set at any point if you want to restart
+  # Switch to 'N-Star' in the 'Alignment' tab when done.
