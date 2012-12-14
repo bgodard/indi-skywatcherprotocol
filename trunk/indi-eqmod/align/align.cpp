@@ -205,7 +205,7 @@ void Align::AlignNStar(double lst, double currentRA, double currentDEC, double *
   //double pointalt = currentDEC + pointset->lat;
   double pointaz, pointalt;
   std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *sortedpoints;
-  pointset->AltAzFromRaDec(currentRA, currentDEC, lst, &pointalt, &pointaz);
+  pointset->AltAzFromRaDec(currentRA, currentDEC, lst, &pointalt, &pointaz, NULL);
   sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None);
   if (sortedpoints->size() < 2) {
     //IDLog("AlignNstar: only %d points in set - using Nearest mode\n", sortedpoints->size());
@@ -305,7 +305,7 @@ void Align::AlignNStar(double lst, double currentRA, double currentDEC, double *
       
       alignedalt = asin(N) * 180.0 / M_PI;
       /* julian date is taken now, should be lst */
-      pointset->RaDecFromAltAz(alignedalt, alignedaz, ln_get_julian_from_sys(), alignedRA, alignedDEC);
+      pointset->RaDecFromAltAz(alignedalt, alignedaz, ln_get_julian_from_sys(), alignedRA, alignedDEC, NULL);
 
 
     } else {
@@ -336,7 +336,7 @@ void Align::AlignNStar(double lst, double currentRA, double currentDEC, double *
       
       alignedalt = asin(n) * 180.0 / M_PI;
       /* julian date is taken now, should be lst */
-      pointset->RaDecFromAltAz(alignedalt, alignedaz, ln_get_julian_from_sys(), alignedRA, alignedDEC);
+      pointset->RaDecFromAltAz(alignedalt, alignedaz, ln_get_julian_from_sys(), alignedRA, alignedDEC, NULL);
       IDMessage(telescope->getDeviceName(), "GOTO ALign NStar: delta RA = %f, delta DEC  = %f\n", (*alignedRA - currentRA), (*alignedDEC - currentDEC));
 
     }
@@ -350,7 +350,7 @@ void Align::AlignNearest(double lst, double currentRA, double currentDEC, double
   //double pointalt = currentDEC + pointset->lat;
   double pointaz, pointalt;
   std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *sortedpoints;
-  pointset->AltAzFromRaDec(currentRA, currentDEC, lst, &pointalt, &pointaz);
+  pointset->AltAzFromRaDec(currentRA, currentDEC, lst, &pointalt, &pointaz, NULL);
   sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None);
   if (sortedpoints->empty()) {
     *alignedRA = currentRA;
@@ -410,7 +410,7 @@ void Align::AlignSync(double lst, double jd, double targetRA, double targetDEC, 
   // add point on sync
   alignsyncsw=IUFindSwitch(AlignOptionsSP,"ADDONSYNC");
   if (alignsyncsw->s == ISS_ON) {
-    pointset->AddPoint(syncdata);
+    pointset->AddPoint(syncdata, NULL);
     IDLog(" Add sync point: %.8f %.8f %.8f %.8f %.8f\n", lst, targetRA, targetDEC, telescopeRA, telescopeDEC);
   }
   IUUpdateNumber(AlignPointNP, values, (char **)names, 6);
@@ -519,7 +519,7 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	  IUUpdateSwitch(AlignListSP,states,names,n);
 	  sw=IUFindOnSwitch(AlignListSP);
 	  if (!strcmp(sw->name,"ALIGNLISTADD")) {
-	    pointset->AddPoint(syncdata);
+	    pointset->AddPoint(syncdata, NULL);
 	    IDMessage(telescope->getDeviceName(), "Align: added point to list");;
 	  } else if (!strcmp(sw->name,"ALIGNLISTCLEAR")) {
 	    pointset->Reset();
