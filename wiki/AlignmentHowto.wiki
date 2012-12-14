@@ -1,13 +1,16 @@
 #summary Using alignment.
 
+*NOT YET TESTED* due to current weather conditions. Use at your own risk.
+
 = Alignment =
 
-By default, the mount is aligned with the last sync point you performed after connecting the mount. If you did'nt sync any point, there would not be any correction. Each time you sync a point, it is by default added to the set of sync points ('Add point on sync' switch is set by default). The last sync point is displayed in the alignment tab. Sync points may also be saved and restored from a 'Data file', this is useful for permanent observatories. The data file is automatically loaded when you connect the mount, which means that if the file exists, you use a permanent observatory. This file has a simple and self-explanatory XML content, so you could edit it by hand.    
+By default, the mount is aligned with the last sync point you performed after connecting the mount. If you did'nt sync any point, there would not be any correction. Each time you sync a point, it is by default added to the set of sync points ('Add point on sync' switch is set by default). The last sync point is displayed in the alignment tab. Sync points may also be saved and restored from a 'Data file': this is useful for permanent observatories. The data file is automatically loaded when you connect the mount, which means that if the file exists, you use a permanent observatory. This file has a simple and self-explanatory XML content, so you could edit it by hand.    
 
+*Nearest Point* alignment mode simply searches in the set of sync points for the nearest one and use its sync data to perform a simple alignement correction (add RA/DEC deltas). 
 
-= Details =
+*N-Star* alignment mode uses the algorithm described in [http://www.geocities.jp/toshimi_taki/matrix/matrix_method_rev_e.pdf Taki's paper] on page 33. It computes a correction matrix based on at least 2 sync points. Actually the 3 nearest sync points are used here. This is a difference with the alignment mode of the EQMod project, where a triangle of sync points is selected  so that the distance of its center to the target is minimal.
 
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+== Detailed steps for using N-Star alignment in Kstars ==
+  # Connect he mount
+  # Set the scope location with the one defined in Kstars: simply press 'Update' in the 'scope location' in the 'Site Management' tab. _Warning: 
+  #    
