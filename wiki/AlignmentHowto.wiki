@@ -1,0 +1,13 @@
+#summary Using alignment.
+
+= Alignment =
+
+By default, the mount is aligned with the last sync point you performed after connecting the mount. If you did'nt sync any point, there would not be any correction. Each time you sync a point, it is by default added to the set of sync points ('Add point on sync' switch is set by default). The last sync point is displayed in the alignment tab. Sync points may also be saved and restored from a 'Data file', this is useful for permanent observatories. The data file is automatically loaded when you connect the mount, which means that if the file exists, you use a permanent observatory. This file has a simple and self-explanatory XML content, so you could edit it by hand.    
+
+
+= Details =
+
+Add your content here.  Format your content with:
+  * Text in *bold* or _italic_
+  * Headings, paragraphs, and lists
+  * Automatic links to other wiki pages
