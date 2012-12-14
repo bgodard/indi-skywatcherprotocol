@@ -19,5 +19,7 @@ By default, the mount is aligned with the last sync point you performed after co
     * Align it in a reticle using 'Move N/S' and 'Move 'E/W' of the motion tab
     * Use 'Sync' in kstars on the star you choosed to add a sync point 
     * At least two sync points should be defined (otherwise nearest point is choosen)
-    * You could empty the set at any point if you want to restart
+    * You could empty the set at any time if you wish to restart
   # Switch to 'N-Star' in the 'Alignment' tab when done.
+
+Subsequent Track/Slew commands will now be 'N-Star' aligned, and the correction displayed in the Message window: you could check if it is safe and abort motion if not. Note that RA/DEC coords will now be slightly changing even when RA tracking, as your mount is not perfectly polar-aligned. An estimation of the misalignment could be made by pointing to the pole: if you switch back to 'No Alignment', the mount reticle in kstars should then almost point to where your mount does. 
