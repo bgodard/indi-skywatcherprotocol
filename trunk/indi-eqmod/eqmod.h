@@ -88,8 +88,7 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	bool isParked;
         GotoParams gotoparams;
 	SyncData syncdata;
-	double getLongitude();
-	double getLatitude();
+
 	void EncodersToRADec(unsigned long rastep, unsigned long destep, double lst, double *ra, double *de, double *ha);
 	double EncoderToHours(unsigned long destep, unsigned long initdestep, unsigned long totalrastep, enum Hemisphere h);
 	double EncoderToDegrees(unsigned long destep, unsigned long initdestep, unsigned long totalrastep, enum Hemisphere h);
@@ -143,6 +142,9 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	bool Sync(double ra,double dec);
         virtual bool canSync();
         virtual bool canPark();
+
+	double getLongitude();
+	double getLatitude();
 
 };
 

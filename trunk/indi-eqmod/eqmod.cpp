@@ -441,12 +441,15 @@ bool EQMod::ReadScopeStatus() {
     NewRaDec(alignedRA, alignedDEC);
     lnradec.ra =(alignedRA * 360.0) / 24.0;
     lnradec.dec =alignedDEC;
+    /*TODO Check lnobserver (long/lat) is modified when GEOGRAPHIC_COORDS are */
     ln_get_hrz_from_equ_sidereal_time(&lnradec, &lnobserver, lst, &lnaltaz);
-    horizvalues[0]=lnaltaz.az;
+    /* libnova measures azimuth from south towards west */
+    horizvalues[0]=range360(lnaltaz.az + 180);
     horizvalues[1]=lnaltaz.alt;
     IUUpdateNumber(HorizontalCoordsNP, horizvalues, (char **)horiznames, 2);
     IDSetNumber(HorizontalCoordsNP, NULL);
 
+    /* TODO should we consider currentHA after alignment ? */
     pierside=SideOfPier(currentHA);
     if (pierside == EAST) {
       piersidevalues[0]=ISS_ON; piersidevalues[1]=ISS_OFF;

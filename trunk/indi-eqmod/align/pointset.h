@@ -61,7 +61,9 @@ class PointSet
   std::set<Distance, bool (*)(Distance, Distance)> *ComputeDistances(double alt, double az, PointFilter filter);
   double lat, lon, alt;
   double range24(double r);
-
+  double range360(double r);
+  void AltAzFromRaDec(double ra, double dec, double lst, double *alt, double *az);
+  void RaDecFromAltAz(double alt, double az, double jd, double *ra, double *dec) ;
  protected:
  private:
 
@@ -70,7 +72,8 @@ class PointSet
 
   // to get access to lat/long data
   INDI::Telescope *telescope;
-
+  // from align data file
+  struct ln_lnlat_posn *lnalignpos; 
 
 };
 #endif
