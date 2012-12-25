@@ -394,7 +394,7 @@ void Skywatcher::SlewRA(double rate) throw (EQModError)
 
   
   if (RARunning && (RAStatus.slewmode==GOTO)) {
-      throw  EQModError(EQModError::ErrInvalidCmd, "Can't slew while goto is in progress");
+      throw  EQModError(EQModError::ErrInvalidCmd, "Can not slew while goto is in progress");
   } 
 
   if ((absrate < get_min_rate()) || (absrate > get_max_rate())) {
@@ -425,7 +425,7 @@ void Skywatcher::SlewDE(double rate) throw (EQModError)
 
   
   if (DERunning && (DEStatus.slewmode==GOTO)) {
-      throw  EQModError(EQModError::ErrInvalidCmd, "Can't slew while goto is in progress");
+      throw  EQModError(EQModError::ErrInvalidCmd, "Can not slew while goto is in progress");
   } 
 
   if ((absrate < get_min_rate()) || (absrate > get_max_rate())) {

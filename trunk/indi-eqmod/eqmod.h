@@ -20,6 +20,7 @@
 
 #include <inditelescope.h>
 #include <indiguiderinterface.h>
+#include <libnova.h>
 
 #include "skywatcher.h"
 #include "align/align.h"
@@ -54,6 +55,7 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 
 	ITextVectorProperty *MountInformationTP;
 	INumberVectorProperty *SteppersNP;
+	INumberVectorProperty *CurrentSteppersNP;
 	INumberVectorProperty *PeriodsNP;
 	INumberVectorProperty *DateNP;
 	ILightVectorProperty *RAStatusLP;
