@@ -19,7 +19,7 @@
 <defText name="MOUNT_TYPE" label="Mount Type"></defText> 
 <defText name="MOTOR_CONTROLLER" label="Firmware Version"></defText> 
 </defTextVector>
-<defNumberVector device="EQMod Mount" name="STEPPERS" label="Stepper/Gear" group="Firmware" state="Idle" perm="rw">
+<defNumberVector device="EQMod Mount" name="STEPPERS" label="Stepper/Gear" group="Firmware" state="Idle" perm="ro">
 <defNumber name="RASteps360" label="RA Steps (Total)" format="%.0f" min="0.0" max="16777215.0" step="1.0">
 1.0
 </defNumber>
@@ -39,7 +39,15 @@
 1.0
 </defNumber>
 </defNumberVector>
-<defLightVector device="EQMod Mount" name="RASTATUS" label="RA Motor Status" group="Firmware" state="Idle" perm="ro">
+<defNumberVector device="EQMod Mount" name="CURRENTSTEPPERS" label="Stepper Position" group="Motor Status" state="Idle" perm="ro">
+<defNumber name="RAStepsCurrent" label="RA Steps" format="%.0f" min="0.0" max="16777215.0" step="1.0">
+1.0
+</defNumber>
+<defNumber name="DEStepsCurrent" label="DE Steps" format="%.0f" min="0.0" max="16777215.0" step="1.0">
+1.0
+</defNumber>
+</defNumberVector>
+<defLightVector device="EQMod Mount" name="RASTATUS" label="RA Motor Status" group="Motor Status" state="Idle" perm="ro">
     <defLight name="RAInitialized" label="Initialized">
 Alert
     </defLight>
@@ -56,7 +64,7 @@ Idle
 Idle
     </defLight>
 </defLightVector>
-<defLightVector device="EQMod Mount" name="DESTATUS" label="DE Motor Status" group="Firmware" state="Idle" perm="ro">
+<defLightVector device="EQMod Mount" name="DESTATUS" label="DE Motor Status" group="Motor Status" state="Idle" perm="ro">
     <defLight name="DEInitialized" label="Initialized">
 Alert
     </defLight>
@@ -89,7 +97,7 @@ Idle
 64.0
 </defNumber>
 </defNumberVector>
-<defNumberVector device="EQMod Mount" name="PERIODS" label="Worm Periods" group="Firmware" state="Idle" perm="rw">
+<defNumberVector device="EQMod Mount" name="PERIODS" label="Worm Periods" group="Motor Status" state="Idle" perm="ro">
 <defNumber name="RAPERIOD" label="RA Period" format="%.0f" min="0.0" max="16384.0" step="1.0">
 256.0
 </defNumber>

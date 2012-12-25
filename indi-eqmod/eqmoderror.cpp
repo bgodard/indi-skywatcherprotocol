@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 #include "eqmoderror.h"
+#include "eqmod.h"
 
 EQModError::EQModError(Severity sev, const char *msg, ...)
 {
@@ -29,4 +30,34 @@ EQModError::EQModError(Severity sev, const char *msg, ...)
     va_end (ap);
   } else message[0] = '\0';
   severity = sev;
+}
+
+const char *EQModError::severityString() {
+  switch (severity) {
+  case EQModError::ErrInvalidCmd: return("Invalid command");
+  case EQModError::ErrCmdFailed: return("Command failed");
+  case EQModError::ErrInvalidParameter: return("Invalid parameter");
+  case EQModError::ErrDisconnect: return("");
+  default: return("Unknown severity");
+  }
+}
+
+bool EQModError::DefaultHandleException(EQMod *device) {
+  switch (severity) {
+  case EQModError::ErrInvalidCmd:
+  case EQModError::ErrCmdFailed:
+  case EQModError::ErrInvalidParameter:
+    IDMessage(device->getDeviceName(), "Warning: %s -> %s", severityString(), message);
+    return false;
+  case EQModError::ErrDisconnect:   
+    IDMessage(device->getDeviceName(), "Error: %s -> %s", severityString(), message);
+    device->Disconnect();
+    return false;
+  default:
+    IDMessage(device->getDeviceName(), "Unhandled exception: %s -> %s", severityString(), message);
+    device->Disconnect();
+    return false;
+    break;
+  }
+  
 }
