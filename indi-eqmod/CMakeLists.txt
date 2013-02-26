@@ -15,6 +15,11 @@ find_package(INDI REQUIRED)
 find_package(Nova REQUIRED)
 find_package(ZLIB REQUIRED)
 #find_package(Threads REQUIRED)
+
+set(EQMOD_VERSION_MAJOR 0)
+set(EQMOD_VERSION_MINOR 1)
+option(WITH_LOGGER "Enable File Logging" OFF)
+option(WITH_NOFMANY "Use NOFMANY switches" OFF)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h )
 
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
@@ -24,8 +29,9 @@ include_directories( ${NOVA_INCLUDE_DIR})
 
 ########### EQMod ###############
 set(eqmod_SRCS
-   ${CMAKE_SOURCE_DIR}/eqmod.cpp ${CMAKE_SOURCE_DIR}/eqmoderror.cpp ${CMAKE_SOURCE_DIR}/skywatcher.cpp ${CMAKE_SOURCE_DIR}/align/align.cpp
-   ${CMAKE_SOURCE_DIR}/align/pointset.cpp ${CMAKE_SOURCE_DIR}/align/htm.c)
+   ${CMAKE_SOURCE_DIR}/eqmod.cpp ${CMAKE_SOURCE_DIR}/eqmoderror.cpp ${CMAKE_SOURCE_DIR}/skywatcher.cpp 
+   ${CMAKE_SOURCE_DIR}/logger/Logger.cpp
+   ${CMAKE_SOURCE_DIR}/align/align.cpp ${CMAKE_SOURCE_DIR}/align/pointset.cpp ${CMAKE_SOURCE_DIR}/align/htm.c)
 
 add_executable(indi_eqmod_telescope ${eqmod_SRCS})
 
