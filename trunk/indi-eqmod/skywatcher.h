@@ -45,6 +45,9 @@ public:
    
     bool Connect(char *port) throw (EQModError);
     bool Disconnect() throw (EQModError);
+    void setDebug (bool enable);
+    void setDeviceName (const char *name);
+    const char *getDeviceName ();
 
     unsigned long GetRAEncoder()  throw (EQModError);
     unsigned long GetDEEncoder()  throw (EQModError);
@@ -81,6 +84,7 @@ public:
     static const char SkywatcherTrailingChar= 0x0d;
     static const double MIN_RATE=0.05;
     static const double MAX_RATE=800.0;
+    unsigned long minperiods[2];
 
     // Types
     enum SkywatcherCommand {      
@@ -144,6 +148,7 @@ public:
     void long2Revu24str(unsigned long ,char *);
     double get_min_rate();
     double get_max_rate();
+    bool isDebug();
 
     // Variables
     //string default_port;
@@ -174,6 +179,9 @@ public:
     char command[SKYWATCHER_MAX_CMD];
     char response[SKYWATCHER_MAX_CMD];
 
+    bool debug;
+    const char *deviceName;
+    bool debugnextread;
 };
 
 #endif

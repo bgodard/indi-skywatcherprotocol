@@ -61,6 +61,7 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	ILightVectorProperty *RAStatusLP;
 	ILightVectorProperty *DEStatusLP;
 	INumberVectorProperty *SlewSpeedsNP;
+	ISwitchVectorProperty *SlewModeSP;
 	ISwitchVectorProperty *HemisphereSP;
 	ISwitchVectorProperty *PierSideSP;
 	ISwitchVectorProperty *TrackModeSP;
@@ -111,6 +112,10 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	double GetDETrackRate();
 	static void timedguideNSCallback(void *userpointer);
 	static void timedguideWECallback(void *userpointer);
+	double GetRASlew();
+	double GetDESlew();
+
+	void setLogDebug (bool enable);
 
     public:
         EQMod();
