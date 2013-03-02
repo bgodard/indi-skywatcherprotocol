@@ -181,6 +181,7 @@ bool Align::updateProperties ()
       telescope->defineSwitch(AlignModeSP);
     Init();
     } else {
+    if (AlignDataBP) {
       telescope->deleteProperty(AlignDataBP->name);
       telescope->deleteProperty(AlignPointNP->name);
       telescope->deleteProperty(AlignListSP->name);
@@ -195,6 +196,7 @@ bool Align::updateProperties ()
       AlignModeSP=NULL;
       AlignTelescopeCoordsNP=NULL;
       AlignOptionsSP=NULL;
+    }
     }
   return true;
 }

@@ -17,6 +17,7 @@ struct Logger::switchinit Logger::DebugLevelSInit[]={
   {"DBG_CALL", "Fun. Calls(unused)", ISS_OFF, DBG_CALL},
   {"DBG_SCOPE_STATUS", "Scope status(verbose)", ISS_OFF, DBG_SCOPE_STATUS}
 };
+#ifdef WITH_LOGGER
 struct Logger::switchinit Logger::LogginLevelSInit[]={
   {"LOG_ERROR", "Errors", ISS_ON, DBG_ERROR},
   {"LOG_WARNING", "Warnings", ISS_ON, DBG_WARNING}, 
@@ -27,6 +28,7 @@ struct Logger::switchinit Logger::LogginLevelSInit[]={
   {"LOG_CALL", "Fun. Calls(unused)", ISS_OFF, DBG_CALL},
   {"LOG_SCOPE_STATUS", "Scope status(verbose)", ISS_OFF, DBG_SCOPE_STATUS}
 };
+#endif
 #else
 struct Logger::switchinit Logger::DebugLevelSInit[]={
   {"DBG_ERROR", "Errors", ISS_OFF, DBG_ERROR},
@@ -38,6 +40,7 @@ struct Logger::switchinit Logger::DebugLevelSInit[]={
   {"DBG_CALL", "Fun. Calls(unused)", ISS_OFF, DBG_CALL},
   {"DBG_SCOPE_STATUS", "Scope status(verbose)", ISS_OFF, DBG_SCOPE_STATUS}
 };
+#ifdef WITH_LOGGER
 struct Logger::switchinit Logger::LoggingLevelSInit[]={
   {"LOG_ERROR", "Errors", ISS_OFF, DBG_ERROR},
   {"LOG_WARNING", "Warnings", ISS_OFF, DBG_WARNING}, 
@@ -48,6 +51,7 @@ struct Logger::switchinit Logger::LoggingLevelSInit[]={
   {"LOG_CALL", "Fun. Calls(unused)", ISS_OFF, DBG_CALL},
   {"LOG_SCOPE_STATUS", "Scope status(verbose)", ISS_OFF, DBG_SCOPE_STATUS}
 };
+#endif
 #endif
 
 ISwitch Logger::DebugLevelS[Logger::nlevels];
