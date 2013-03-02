@@ -470,7 +470,7 @@ bool Align::ISNewNumber (const char *dev, const char *name, double values[], cha
 
   if(strcmp(dev,telescope->getDeviceName())==0)
     {
-     if(strcmp(name, AlignPointNP->name)==0)
+     if(AlignPointNP && strcmp(name, AlignPointNP->name)==0)
 	{
 	  AlignPointNP->s=IPS_OK;
 	  IUUpdateNumber(AlignPointNP,values,names,n);
@@ -478,7 +478,7 @@ bool Align::ISNewNumber (const char *dev, const char *name, double values[], cha
 	  return true;
 	}
     }
-    return true;
+    return false;
 }
 
 bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, char *names[], int n)
@@ -550,7 +550,7 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	}
     }
 
-  return true;
+  return false;
 }
 
 bool Align::ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n) 
@@ -577,7 +577,7 @@ bool Align::ISNewText (const char *dev, const char *name, char *texts[], char *n
  	}
 
      }
-  return true;
+  return false;
 }
 
 bool Align::ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int num)
@@ -586,5 +586,5 @@ bool Align::ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsi
     {      
     }
 
-  return true;
+  return false;
 }
