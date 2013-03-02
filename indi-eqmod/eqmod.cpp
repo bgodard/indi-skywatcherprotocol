@@ -157,7 +157,9 @@ EQMod::EQMod()
   RAInverted = DEInverted = false;
   bzero(&syncdata, sizeof(syncdata));
 
+#ifdef WITH_ALIGN_GEEHALEL
   align=new Align(this);
+#endif
 
 #ifdef WITH_SIMULATOR
   simulator=new EQModSimulator(this);
@@ -218,7 +220,9 @@ bool EQMod::initProperties()
 
     //IDLog("initProperties: connected=%d %s", (isConnected()?1:0), this->getDeviceName());
 
+    if (align) {
     if (!align->initProperties()) return false;
+    }
 
     INDI::GuiderInterface::initGuiderProperties(this->getDeviceName(), MOTION_TAB);
 
@@ -236,8 +240,9 @@ void EQMod::ISGetProperties (const char *dev)
     /* First we let our parent populate */
     INDI::Telescope::ISGetProperties(dev);
     //IDMessage(dev,"ISGetProperties: connected=%d %s", (isConnected()?1:0), dev);
-
-    align->ISGetProperties(dev);
+    if (align){
+      align->ISGetProperties(dev);
+    }
     return;
 }
 
@@ -368,8 +373,9 @@ bool EQMod::updateProperties()
 	  MountInformationTP=NULL;
 	} 
       }
-    if (!align->updateProperties()) return false;
-
+    if (align) {
+      if (!align->updateProperties()) return false;
+    }
     return true;
 }
 
@@ -405,7 +411,6 @@ bool EQMod::Connect(char *port)
     return(e.DefaultHandleException(this));
   }
 
-  //  if (align) align->Init();
   DEBUG(Logger::DBG_SESSION, "Successfully connected to EQMod Mount.");
   return true;
 }
