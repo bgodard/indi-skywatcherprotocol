@@ -346,24 +346,27 @@ bool EQMod::updateProperties()
       }
     else
       {
-	deleteProperty(GuideNSP.name);
-	deleteProperty(GuideEWP.name);
-	deleteProperty(GuideRateNP->name);
-	deleteProperty(MountInformationTP->name);
-	deleteProperty(SteppersNP->name);
-	deleteProperty(CurrentSteppersNP->name);
-	deleteProperty(PeriodsNP->name);
-	deleteProperty(DateNP->name);
-	deleteProperty(RAStatusLP->name);
-	deleteProperty(DEStatusLP->name);
-	deleteProperty(SlewSpeedsNP->name);
-	deleteProperty(SlewModeSP->name);
-	deleteProperty(HemisphereSP->name);
-	deleteProperty(TrackModeSP->name);
-	deleteProperty(TrackRatesNP->name);
-	deleteProperty(HorizontalCoordsNP->name);
-	deleteProperty(PierSideSP->name);
-	//deleteProperty(AbortMotionSP->name);
+	if (MountInformationTP) {
+	  deleteProperty(GuideNSP.name);
+	  deleteProperty(GuideEWP.name);
+	  deleteProperty(GuideRateNP->name);
+	  deleteProperty(MountInformationTP->name);
+	  deleteProperty(SteppersNP->name);
+	  deleteProperty(CurrentSteppersNP->name);
+	  deleteProperty(PeriodsNP->name);
+	  deleteProperty(DateNP->name);
+	  deleteProperty(RAStatusLP->name);
+	  deleteProperty(DEStatusLP->name);
+	  deleteProperty(SlewSpeedsNP->name);
+	  deleteProperty(SlewModeSP->name);
+	  deleteProperty(HemisphereSP->name);
+	  deleteProperty(TrackModeSP->name);
+	  deleteProperty(TrackRatesNP->name);
+	  deleteProperty(HorizontalCoordsNP->name);
+	  deleteProperty(PierSideSP->name);
+	  //deleteProperty(AbortMotionSP->name);
+	  MountInformationTP=NULL;
+	} 
       }
     if (!align->updateProperties()) return false;
 
@@ -409,15 +412,17 @@ bool EQMod::Connect(char *port)
 
 bool EQMod::Disconnect()
 {
-  try {
-    mount->Disconnect();
-  }
- catch(EQModError e) {
-   DEBUGF(Logger::DBG_ERROR, "Error when disconnecting mount -> %s", e.message);
-   return(false);
- }
-  DEBUG(Logger::DBG_SESSION,"Disconnected from EQMod Mount.");
-  return true;
+  if (isConnected()) {
+    try {
+      mount->Disconnect();
+    }
+    catch(EQModError e) {
+      DEBUGF(Logger::DBG_ERROR, "Error when disconnecting mount -> %s", e.message);
+      return(false);
+    }
+    DEBUG(Logger::DBG_SESSION,"Disconnected from EQMod Mount.");
+    return true;
+  } else return false;
 }
 
 void EQMod::TimerHit()
