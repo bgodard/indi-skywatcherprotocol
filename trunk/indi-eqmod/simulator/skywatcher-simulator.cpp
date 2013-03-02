@@ -1,3 +1,4 @@
+
 #include "skywatcher-simulator.h"
 #include <string.h>
 #include <indidevapi.h> 
@@ -150,6 +151,7 @@ void SkywatcherSimulator::compute_ra_position() {
  
       if (ra_target_current + deltastep >= ra_target) {
 	deltastep = ra_target - ra_target_current;
+	SETMOTORPROPERTY(ra_status, SLEWMODE);
 	ra_pause();
       } else
 	ra_target_current+=deltastep;
@@ -183,6 +185,7 @@ void SkywatcherSimulator::compute_de_position() {
       }
       if (de_target_current + deltastep >= de_target) {
 	deltastep = de_target - de_target_current;
+	SETMOTORPROPERTY(de_status, SLEWMODE);
 	de_pause();
       } else
 	de_target_current+=deltastep;

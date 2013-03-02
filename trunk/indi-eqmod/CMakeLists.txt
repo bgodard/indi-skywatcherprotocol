@@ -18,6 +18,7 @@ find_package(ZLIB REQUIRED)
 
 set(EQMOD_VERSION_MAJOR 0)
 set(EQMOD_VERSION_MINOR 1)
+option(WITH_ALIGN_GEEHALEL "Enable Alignment Test" ON)
 option(WITH_SIMULATOR "Enable Simulator" ON)
 option(WITH_LOGGER "Enable File Logging" OFF)
 option(WITH_NOFMANY "Use NOFMANY switches" OFF)
