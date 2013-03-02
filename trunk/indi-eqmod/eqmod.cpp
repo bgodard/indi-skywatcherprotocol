@@ -150,13 +150,19 @@ EQMod::EQMod()
   DEBUG_CONF("/tmp/indi_eqmod_telescope",  Logger::file_on|Logger::screen_on, Logger::defaultlevel, Logger::defaultlevel);
 #endif
 
-  mount=new Skywatcher();
-  mount->setDeviceName(getDeviceName());
+
+  mount=new Skywatcher(this);
+
   pierside = EAST;
   RAInverted = DEInverted = false;
   bzero(&syncdata, sizeof(syncdata));
 
   align=new Align(this);
+
+#ifdef WITH_SIMULATOR
+  simulator=new EQModSimulator(this);
+#endif
+
   /* initialize random seed: */
   srand ( time(NULL) );
 }
@@ -178,6 +184,17 @@ void EQMod::setLogDebug (bool enable)
   //if (mount) mount->setDebug(enable);
 
 }
+#ifdef WITH_SIMULATOR
+void EQMod::setStepperSimulation (bool enable) 
+{
+  if ((enable && !isSimulation()) || (!enable && isSimulation())) {
+    mount->setSimulation(enable); 
+    if (not simulator->updateProperties(enable)) 
+      DEBUG(Logger::DBG_WARNING,"setStepperSimulator: Disable/Enable error");
+  }
+  INDI::Telescope::setSimulation(enable);
+}
+#endif
 
 const char * EQMod::getDefaultName()
 {
@@ -207,7 +224,9 @@ bool EQMod::initProperties()
 
     /* Add debug controls so we may debug driver if necessary */
     addDebugControl();
-    
+#ifdef WITH_SIMULATOR
+    addSimulationControl();
+#endif
     return true;
 }
 
@@ -1005,13 +1024,14 @@ bool EQMod::GuideWest(float ms) {
 
 bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], char *names[], int n)
 {
+  bool compose=true;
   //  first check if it's for our device
-
   if(strcmp(dev,getDeviceName())==0)
     {
       //  This is for our device
       //  Now lets see if it's something we process here
-      
+
+
       if(strcmp(name,"SLEWSPEEDS")==0)
 	{ 
 	  unsigned int i;
@@ -1105,9 +1125,15 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 	}
       
     }
-  
 
-    if (align) align->ISNewNumber(dev,name,values,names,n);
+
+  if (align) { compose=align->ISNewNumber(dev,name,values,names,n); if (compose) return true;}
+
+#ifdef WITH_SIMULATOR
+  if (simulator) { 
+      compose=simulator->ISNewNumber(dev,name,values,names,n); if (compose) return true;
+  }
+#endif
 
     //  if we didn't process it, continue up the chain, let somebody else
     //  give it a shot
@@ -1116,7 +1142,7 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 
 bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, char *names[], int n)
 {
-
+  bool compose=true;
     //IDLog("Enter IsNewSwitch for %s\n",name);
     //for(int x=0; x<n; x++) {
     //    IDLog("Switch %s %d\n",names[x],states[x]);
@@ -1138,7 +1164,24 @@ bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	    setLogDebug(false);
 	  return true;
 	}
-      
+
+#ifdef WITH_SIMULATOR
+      if (!strcmp(name, "SIMULATION"))
+	{
+	  ISwitchVectorProperty *svp = getSwitch(name);
+	  IUUpdateSwitch(svp, states, names, n);
+	  ISwitch *sp = IUFindOnSwitch(svp);
+	  if (!sp)
+	    return false;
+	  
+	  if (!strcmp(sp->name, "ENABLE"))
+	    setStepperSimulation(true);
+	  else
+	    setStepperSimulation(false);
+	  return true;
+	}
+#endif
+
       if(strcmp(name,"HEMISPHERE")==0)
 	{
 	  /* Read-only property */
@@ -1205,20 +1248,34 @@ bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	}
     }
 
-    if (align) align->ISNewSwitch(dev,name,states,names,n);
+    if (align) { compose=align->ISNewSwitch(dev,name,states,names,n); if (compose) return true;}
+
+#ifdef WITH_SIMULATOR
+    if (simulator) { 
+      compose=simulator->ISNewSwitch(dev,name,states,names,n); if (compose) return true;
+  }
+#endif
+
     Logger::ISNewSwitch(dev,name,states,names,n);
+
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev,name,states,names,n);
 }
 
 bool EQMod::ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n) 
 {
-
+  bool compose;
   if(strcmp(dev,getDeviceName())==0)
     {
 
     }
-  if (align) align->ISNewText(dev,name,texts,names,n);
+  if (align) { compose=align->ISNewText(dev,name,texts,names,n); if (compose) return true;}
+
+#ifdef WITH_SIMULATOR
+  if (simulator) { 
+    compose=simulator->ISNewText(dev,name,texts,names,n); if (compose) return true;
+  }
+#endif
   //  Nobody has claimed this, so, ignore it
   return INDI::Telescope::ISNewText(dev,name,texts,names,n);
 }

@@ -35,16 +35,21 @@
 #include <indidevapi.h>
 #include <indicom.h>
 
+#include "config.h"
 #include "eqmoderror.h"
 #include "skywatcher.h"
+#include "eqmod.h"
 
 #include "logger/Logger.h"
+#include "simulator/simulator.h"
 
-Skywatcher::Skywatcher(void)
+
+Skywatcher::Skywatcher(EQMod *t)
 {
   fd=-1;
   debug=false;
   debugnextread=false;
+  telescope = t;
 
 }
 
@@ -61,15 +66,22 @@ bool Skywatcher::isDebug ()
 {
   return debug;
 }
-void Skywatcher::setDeviceName (const char *name) 
+
+#ifdef WITH_SIMULATOR
+void Skywatcher::setSimulation (bool enable) 
 {
-  deviceName=name;
+  simulation=enable;
 }
+bool Skywatcher::isSimulation () 
+{
+  return simulation;
+}
+#endif
+
 const char *Skywatcher::getDeviceName () 
 {
-  return deviceName;
+  return telescope->getDeviceName();
 }
-
 
 /* API */
 
@@ -77,6 +89,9 @@ bool Skywatcher::Connect(char *port)  throw (EQModError)
 {   
   int err_code = 0;
   unsigned long tmpMCVersion=0;
+#ifdef WITH_SIMULATOR
+  if (!(isSimulation())) {
+#endif
   if ((err_code=tty_connect(port, 9600, 8, 0, 1, &fd)) != TTY_OK)
     {
       char ttyerrormsg[ERROR_MSG_LENGTH];
@@ -85,7 +100,11 @@ bool Skywatcher::Connect(char *port)  throw (EQModError)
 		       port, ttyerrormsg);
       return false;
     }
-    
+#ifdef WITH_SIMULATOR
+  } else {
+    telescope->simulator->Connect();
+  }
+#endif    
   dispatch_command(InquireMotorBoardVersion, Axis1, NULL);
   read_eqmod();
   tmpMCVersion=Revu24str2long(response+1);
@@ -115,8 +134,14 @@ bool Skywatcher::Disconnect() throw (EQModError)
     read_eqmod();
   }
   */
+#ifdef WITH_SIMULATOR
+  if (!isSimulation()) {
+#endif
   tty_disconnect(fd);
   fd=-1;
+#ifdef WITH_SIMULATOR
+    }
+#endif
   return true;
 }
 
@@ -784,7 +809,9 @@ bool Skywatcher::dispatch_command(SkywatcherCommand cmd, SkywatcherAxis axis, ch
     snprintf(command, SKYWATCHER_MAX_CMD, "%c%c%c%c", SkywatcherLeadingChar, cmd, axis, SkywatcherTrailingChar);
   else
     snprintf(command, SKYWATCHER_MAX_CMD, "%c%c%c%s%c", SkywatcherLeadingChar, cmd, axis, command_arg, SkywatcherTrailingChar);
-  
+#ifdef WITH_SIMULATOR
+  if (!isSimulation()) {
+#endif
   tcflush(fd, TCIOFLUSH);
   
   if  ( (err_code = tty_write_string(fd, command, &nbytes_written) != TTY_OK))
@@ -795,6 +822,11 @@ bool Skywatcher::dispatch_command(SkywatcherCommand cmd, SkywatcherAxis axis, ch
 		       ttyerrormsg);
       return false;
    }
+#ifdef WITH_SIMULATOR
+  } else {
+    telescope->simulator->receive_cmd(command, &nbytes_written);
+  }
+#endif
   if (Logger::debugSerial(cmd)) {
     command[nbytes_written-1]='\0'; //hmmm, remove \r, the  SkywatcherTrailingChar
     DEBUGF(Logger::DBG_COMM, "dispatch_command: \"%s\", %d bytes written", command, nbytes_written);
@@ -811,7 +843,9 @@ bool Skywatcher::read_eqmod() throw (EQModError)
 
     // Clear string
     response[0] = '\0';
-
+#ifdef WITH_SIMULATOR
+  if (!isSimulation()) {
+#endif
     //Have to onsider cases when we read ! (error) or 0x01 (buffer overflow)
     // Read until encountring a CR
     if ( (err_code = tty_read_section(fd, response, 0x0D, 15, &nbytes_read)) != TTY_OK)
@@ -822,7 +856,11 @@ bool Skywatcher::read_eqmod() throw (EQModError)
 		       ttyerrormsg);
       return false;
     }
-
+#ifdef WITH_SIMULATOR
+  } else {
+    telescope->simulator->send_reply(response, &nbytes_read);
+  }
+#endif
     // Remove CR
     response[nbytes_read-1] = '\0';
 

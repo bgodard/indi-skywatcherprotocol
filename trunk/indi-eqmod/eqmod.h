@@ -22,8 +22,12 @@
 #include <indiguiderinterface.h>
 #include <libnova.h>
 
+#include "config.h"
 #include "skywatcher.h"
 #include "align/align.h"
+#ifdef WITH_SIMULATOR
+#include "simulator/simulator.h"
+#endif
 
 class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 {
@@ -31,6 +35,7 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
     private:
         Skywatcher *mount;
 	Align *align;
+
 	unsigned long currentRAEncoder, zeroRAEncoder, totalRAEncoder;
 	unsigned long currentDEEncoder, zeroDEEncoder, totalDEEncoder;
 	
@@ -116,7 +121,7 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	double GetDESlew();
 
 	void setLogDebug (bool enable);
-
+	void setStepperSimulation (bool enable);
     public:
         EQMod();
         virtual ~EQMod();
@@ -152,7 +157,9 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 
 	double getLongitude();
 	double getLatitude();
-
+#ifdef WITH_SIMULATOR
+	EQModSimulator *simulator;
+#endif
 };
 
 #endif // EQMOD_H

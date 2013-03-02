@@ -20,7 +20,14 @@
 
 #include <sys/time.h>
 #include <time.h>
+#include <inditelescope.h>
 #include "eqmoderror.h"
+//#include "eqmod.h"
+class EQMod; // TODO
+
+#ifdef WITH_SIMULATOR
+#include "simulator/simulator.h"
+#endif
 
 #define SKYWATCHER_MAX_CMD        16
 #define SKYWATCHER_MAX_TRIES      3
@@ -40,14 +47,14 @@ class Skywatcher
 {
 
 public:
-    Skywatcher();
+    Skywatcher(EQMod *t);
     ~Skywatcher();
    
     bool Connect(char *port) throw (EQModError);
     bool Disconnect() throw (EQModError);
     void setDebug (bool enable);
-    void setDeviceName (const char *name);
     const char *getDeviceName ();
+
 
     unsigned long GetRAEncoder()  throw (EQModError);
     unsigned long GetDEEncoder()  throw (EQModError);
@@ -74,7 +81,11 @@ public:
     void StartDETracking(double trackspeed) throw (EQModError);
     bool IsRARunning() throw (EQModError);
     bool IsDERunning() throw (EQModError);
-
+#ifdef WITH_SIMULATOR
+    void setSimulation(bool);
+    bool isSimulation();
+    bool simulation;
+#endif
  private: 
 
     // Official Skywatcher Protocol
@@ -182,6 +193,8 @@ public:
     bool debug;
     const char *deviceName;
     bool debugnextread;
+    EQMod *telescope;
+
 };
 
 #endif

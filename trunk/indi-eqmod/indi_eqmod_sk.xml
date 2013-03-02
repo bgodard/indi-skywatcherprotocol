@@ -32,10 +32,10 @@
 <defNumber name="DEStepsWorm" label="DE Steps (Worm)" format="%.0f" min="0.0" max="16777215.0" step="1.0">
 1.0
 </defNumber>
-<defNumber name="RAHighspeedRatio" label="RA Highspeed ratio" format="%.0f" min="1.0" max="16.0" step="1.0">
+<defNumber name="RAHighspeedRatio" label="RA Highspeed ratio" format="%.0f" min="1.0" max="256.0" step="1.0">
 1.0
 </defNumber>
-<defNumber name="DEHighspeedRatio" label="DE Highspeed ratio" format="%.0f" min="1.0" max="16.0" step="1.0">
+<defNumber name="DEHighspeedRatio" label="DE Highspeed ratio" format="%.0f" min="1.0" max="256.0" step="1.0">
 1.0
 </defNumber>
 </defNumberVector>
