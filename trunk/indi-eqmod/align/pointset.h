@@ -27,12 +27,14 @@
 // to get access to lat/long data
 #include <inditelescope.h>
 
+
 typedef struct AlignData {
   double lst;
   double jd;
   double targetRA, targetDEC;
   double telescopeRA, telescopeDEC;
 } AlignData;
+
 
 class PointSet 
 {
@@ -54,10 +56,13 @@ class PointSet
   PointSet(INDI::Telescope *);
   void AddPoint(AlignData aligndata, struct ln_lnlat_posn *pos);
   Point *getPoint(HtmID htmid);
+  int getNbPoints();
   void Init();
   void Reset();
   char *LoadDataFile(const char *filename);
   char *WriteDataFile(const char *filename);
+  XMLEle *toXML();
+  void setBlobData(IBLOB *blob); 
   std::set<Distance, bool (*)(Distance, Distance)> *ComputeDistances(double alt, double az, PointFilter filter);
   double lat, lon, alt;
   double range24(double r);
