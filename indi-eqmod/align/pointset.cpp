@@ -29,6 +29,7 @@
 
 #include "pointset.h"
 
+
 double PointSet::range24(double r) {
   double res = r;
   while (res<0.0) res+=24.0;
@@ -44,19 +45,19 @@ double PointSet::range360(double r) {
 }
 
 
-void PointSet::AltAzFromRaDec(double ra, double dec, double lst, double *alt, double *az, struct ln_lnlat_posn *pos) 
+void PointSet::AltAzFromRaDec(double ra, double dec, double jd, double *alt, double *az, struct ln_lnlat_posn *pos) 
 {
   struct ln_equ_posn lnradec;
   struct ln_lnlat_posn lnpos; 
   struct ln_hrz_posn lnaltaz;
-  lnradec.ra=(ra * 180.0) /24.0; lnradec.dec=dec;
+  lnradec.ra=(ra * 360.0) /24.0; lnradec.dec=dec;
   if (pos) { lnpos.lng = pos->lng; lnpos.lat = pos->lat; 
   } else { 
     lnpos.lng = IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value; 
     lnpos.lat = IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value; 
   }
 
-  ln_get_hrz_from_equ_sidereal_time(&lnradec, &lnpos, lst, &lnaltaz);
+  ln_get_hrz_from_equ(&lnradec, &lnpos, jd, &lnaltaz);
   *alt=lnaltaz.alt; *az=range360(lnaltaz.az + 180.0); 
 
 }
@@ -66,15 +67,14 @@ void PointSet::RaDecFromAltAz(double alt, double az, double jd, double *ra, doub
   struct ln_equ_posn lnradec;
   struct ln_lnlat_posn lnpos; 
   struct ln_hrz_posn lnaltaz;
-  lnaltaz.alt=alt; lnaltaz.az=range360(az - 180.0);
+  lnaltaz.alt=alt; lnaltaz.az=range360(az + 180.0);
   if (pos) { lnpos.lng = pos->lng; lnpos.lat = pos->lat; 
   } else { 
     lnpos.lng = IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value; 
     lnpos.lat = IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value; 
   }
-  jd += ((lnpos.lng / 15.0) / 24.0);
   ln_get_equ_from_hrz (&lnaltaz, &lnpos, jd, &lnradec);
-  *ra=(lnradec.ra * 24.0)/180.0; *dec=lnradec.dec; 
+  *ra=(lnradec.ra * 24.0)/360.0; *dec=lnradec.dec; 
 
 }
 
@@ -129,9 +129,9 @@ void PointSet::AddPoint(AlignData aligndata, struct ln_lnlat_posn *pos)
   //point.telescopeAZ = (range24(point.aligndata.lst - point.aligndata.telescopeRA - 12.0) * 360.0) / 24.0;
   //point.celestialALT = point.aligndata.targetDEC + lat;
   //point.telescopeALT = point.aligndata.telescopeDEC + lat;
-  AltAzFromRaDec(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.lst, 
+  AltAzFromRaDec(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.jd, 
 		 &point.celestialALT, &point.celestialAZ, pos);
-  AltAzFromRaDec(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.lst, 
+  AltAzFromRaDec(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.jd, 
 		 &point.telescopeALT, &point.telescopeAZ, pos);
   point.htmID=cc_radec2ID(point.celestialAZ, point.celestialALT, 19);
   cc_ID2name(point.htmname,  point.htmID);
@@ -143,6 +143,11 @@ void PointSet::AddPoint(AlignData aligndata, struct ln_lnlat_posn *pos)
 
 PointSet::Point *PointSet::getPoint(HtmID htmid) {
   return &(PointSetMap->find(htmid)->second);
+}
+
+int PointSet::getNbPoints()
+{
+  return PointSetMap->size();
 }
 
 void PointSet::Init()
@@ -243,17 +248,7 @@ char *PointSet::WriteDataFile(const char *filename)
 {
   wordexp_t wexp;
   FILE *fp;
-  static char errmsg[512];
-  AlignData aligndata;
-  XMLEle *root, *alignxml, *sitexml;
-  XMLAtt *ap;
-  char sitename[26];
-  char sitedata[26];
-  std::map<HtmID, Point>::iterator it;
-  time_t tnow;
-  struct tm tm_now;
-
-  
+  XMLEle *root;
 
   if (wordexp(filename, &wexp, 0)) {
     wordfree(&wexp);
@@ -264,20 +259,48 @@ char *PointSet::WriteDataFile(const char *filename)
     wordfree(&wexp);
     return strerror(errno);
   }
+  if (lnalignpos) {
+    if ((lnalignpos->lng != IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value) ||
+	(lnalignpos->lat != IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value))
+      return (char *)("Can not mix alignment data from different sites (lng. and/or lat. differs)");
+  }
+  root=toXML();
+  
+  prXMLEle(fp, root, 0);
+  fclose(fp);
+  return NULL;
+  
+}
+
+XMLEle *PointSet::toXML() {
+
+  AlignData aligndata;
+  XMLEle *root, *alignxml, *sitexml; //, *mountxml;
+  XMLAtt *ap;
+  char sitename[26];
+  char sitedata[26];
+  std::map<HtmID, Point>::iterator it;
+  time_t tnow;
+  struct tm tm_now;
+
   root = addXMLEle(NULL, "aligndata");
   sitexml=addXMLEle(root, "site");
-  
+  /* WARNING When an align data file has been loaded this should be taken from the file, not current session */
   tnow=time(NULL);
   localtime_r(&tnow, &tm_now);
   strftime(sitename, sizeof(sitename), "%F@%T", &tm_now);
   addXMLAtt(sitexml, "name", sitename);
   
-  snprintf(sitedata, sizeof(sitedata), "%g", IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value);
+  snprintf(sitedata, sizeof(sitedata), "%g", ((lnalignpos==NULL)?IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value:lnalignpos->lng));
   addXMLAtt(sitexml, "lon", sitedata);  
 
-  snprintf(sitedata, sizeof(sitedata), "%g", IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value);
+  snprintf(sitedata, sizeof(sitedata), "%g", ((lnalignpos==NULL)?IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value:lnalignpos->lat));
   addXMLAtt(sitexml, "lat", sitedata);
   
+  //mountxml=addXMLEle(sitexml,"mount");
+  //snprintf(sitedata, sizeof(sitedata), "%d", telescope->totalRAEncoder);
+  //addXMLAtt(mountxml, "totalRA", sitedata);
+
   for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
     XMLEle *data;
     char pcdata[30];
@@ -300,9 +323,19 @@ char *PointSet::WriteDataFile(const char *filename)
     editXMLEle(data, pcdata);
     
   }
-  
-  prXMLEle(fp, root, 0);
-  fclose(fp);
-  return NULL;
-  
+  return root;
+}
+
+void PointSet::setBlobData(IBLOB *blob) {
+  XMLEle *root;
+  char *blobxml;
+  int blobsize;
+  root=toXML();
+  blobsize=sprlXMLEle(root, 0);
+  blobxml=(char *)malloc((blobsize+1) * sizeof(char));
+  sprXMLEle(blobxml, root, 0);
+  blob->size=blobsize+1;
+  blob->bloblen=blob->size;
+  strcpy(blob->format, ".xml");
+  blob->blob=(void *)blobxml;
 }

@@ -15,6 +15,13 @@
     along with the Skywatcher Protocol INDI driver.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* TODO */
+/* HORIZONTAL_COORDS -> HORIZONTAL_COORD - OK */
+/* DATE -> TIME_LST/LST and TIME_UTC/UTC - OK */
+/*  Problem in time initialization using gettimeofday/gmtime: 1h after UTC on summer, because of DST ?? */
+/* TELESCOPE_MOTION_RATE in arcmin/s */
+/* use/snoop a GPS ??*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,7 +63,8 @@ std::auto_ptr<EQMod> eqmod(0);
 #define SLEW_LIMIT      2                               /* Move at SLEW_LIMIT until distance from target is SLEW_LIMIT degrees */
 #define FINE_SLEW_LIMIT 0.5                             /* Move at FINE_SLEW_RATE until distance from target is FINE_SLEW_LIMIT degrees */
 
-#define	POLLMS		250				/* poll period, ms */
+//#define	POLLMS		250				/* poll period, ms */
+#define POLLMS 1000
 
 #define GOTO_ITERATIVE_LIMIT 5     /* Max GOTO Iterations */
 #define RAGOTORESOLUTION 5        /* GOTO Resolution in arcsecs */
@@ -80,7 +88,28 @@ double defaultspeed=64.0;
 #define GUIDE_WEST      0
 #define GUIDE_EAST      1
 
-
+int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y)
+{
+  /* Perform the carry for the later subtraction by updating y. */
+  if (x->tv_usec < y->tv_usec) {
+    int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+    y->tv_usec -= 1000000 * nsec;
+    y->tv_sec += nsec;
+  }
+  if (x->tv_usec - y->tv_usec > 1000000) {
+    int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+    y->tv_usec += 1000000 * nsec;
+    y->tv_sec -= nsec;
+  }
+  
+  /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+  result->tv_sec = x->tv_sec - y->tv_sec;
+  result->tv_usec = x->tv_usec - y->tv_usec;
+  
+  /* Return 1 if result is negative. */
+  return x->tv_sec < y->tv_sec;
+}
 
 void ISPoll(void *p);
 
@@ -156,6 +185,7 @@ EQMod::EQMod()
   pierside = EAST;
   RAInverted = DEInverted = false;
   bzero(&syncdata, sizeof(syncdata));
+  bzero(&syncdata2, sizeof(syncdata2));
 
 #ifdef WITH_ALIGN_GEEHALEL
   align=new Align(this);
@@ -164,6 +194,17 @@ EQMod::EQMod()
 #ifdef WITH_SIMULATOR
   simulator=new EQModSimulator(this);
 #endif
+  
+  /* initialize time */
+  tzset();
+  gettimeofday(&lasttimeupdate, NULL);
+  gmtime_r(&lasttimeupdate.tv_sec, &utc);
+  lndate.seconds = utc.tm_sec + ((double)lasttimeupdate.tv_usec / 1000000);
+  lndate.minutes = utc.tm_min;
+  lndate.hours = utc.tm_hour;
+  lndate.days = utc.tm_mday;
+  lndate.months = utc.tm_mon + 1;
+  lndate.years = utc.tm_year + 1900;
 
   /* initialize random seed: */
   srand ( time(NULL) );
@@ -211,6 +252,36 @@ double EQMod::getLongitude()
 double EQMod::getLatitude() 
 {
   return(IUFindNumber(&LocationNV, "LAT")->value);
+}
+
+double EQMod::getJulianDate()
+{
+  
+  struct timeval currenttime, difftime;
+  double usecs;
+  gettimeofday(&currenttime, NULL);
+  if (timeval_subtract(&difftime, &currenttime, &lasttimeupdate) == -1)
+    return juliandate;
+  //IDLog("Diff %d %d\n", difftime.tv_sec,  difftime.tv_usec);
+  lndate.seconds += (difftime.tv_sec + (difftime.tv_usec / 1000000));
+  usecs=lndate.seconds - floor(lndate.seconds);
+  utc.tm_sec=lndate.seconds;
+  mktime(&utc); // normalize time
+  ln_get_date_from_tm(&utc, &lndate);
+  lndate.seconds+=usecs;
+  lasttimeupdate = currenttime;
+  juliandate=ln_get_julian_day(&lndate);
+  return juliandate;
+}
+
+double EQMod::getLst(double jd, double lng)
+{
+  double lst;
+  //lst=ln_get_mean_sidereal_time(jd); 
+  lst=ln_get_apparent_sidereal_time(jd);
+  lst+=(lng / 15.0);
+  lst=range24(lst);
+  return lst;
 }
 
 bool EQMod::initProperties()
@@ -274,7 +345,9 @@ bool EQMod::updateProperties()
 	SteppersNP=getNumber("STEPPERS");
 	CurrentSteppersNP=getNumber("CURRENTSTEPPERS");
 	PeriodsNP=getNumber("PERIODS");
-	DateNP=getNumber("DATE");
+	JulianNP=getNumber("JULIAN");
+	TimeLSTNP=getNumber("TIME_LST");
+	TimeUTCTP=getText("TIME_UTC");
 	RAStatusLP=getLight("RASTATUS");
 	DEStatusLP=getLight("DESTATUS");
 	SlewSpeedsNP=getNumber("SLEWSPEEDS");
@@ -284,7 +357,7 @@ bool EQMod::updateProperties()
 	TrackModeSP=getSwitch("TRACKMODE");
 	TrackRatesNP=getNumber("TRACKRATES");
 	//AbortMotionSP=getSwitch("TELESCOPE_ABORT_MOTION");
-	HorizontalCoordsNP=getNumber("HORIZONTAL_COORDS");
+	HorizontalCoordNP=getNumber("HORIZONTAL_COORD");
 	for (i=1; i<SlewModeSP->nsp; i++) {
 	  if (i < SLEWMODES) {
 	    sprintf(SlewModeSP->sp[i].label, "%.2fx", slewspeeds[i-1]);
@@ -294,6 +367,11 @@ bool EQMod::updateProperties()
 	    SlewModeSP->sp[i].aux=(void *)&defaultspeed;
 	  }
 	}
+	StandardSyncNP=getNumber("STANDARDSYNC");
+	StandardSyncPointNP=getNumber("STANDARDSYNCPOINT");
+	SyncPolarAlignNP=getNumber("SYNCPOLARALIGN");
+	SyncManageSP=getSwitch("SYNCMANAGE");
+
 	defineNumber(&GuideNSP);
 	defineNumber(&GuideEWP);
 	defineSwitch(SlewModeSP);
@@ -303,15 +381,22 @@ bool EQMod::updateProperties()
 	defineNumber(SteppersNP);
 	defineNumber(CurrentSteppersNP);
 	defineNumber(PeriodsNP);
-	defineNumber(DateNP);
+	defineNumber(JulianNP);
+	defineNumber(TimeLSTNP);
+	defineText(TimeUTCTP);
 	defineLight(RAStatusLP);
 	defineLight(DEStatusLP);
 	defineSwitch(HemisphereSP);
 	defineSwitch(TrackModeSP);
 	defineNumber(TrackRatesNP);
-	defineNumber(HorizontalCoordsNP);
+	defineNumber(HorizontalCoordNP);
 	defineSwitch(PierSideSP);
 	//defineSwitch(AbortMotionSP);
+	defineNumber(StandardSyncNP);
+	defineNumber(StandardSyncPointNP);
+	defineNumber(SyncPolarAlignNP);
+	defineSwitch(SyncManageSP);
+
 	try {
 	  mount->InquireBoardVersion(MountInformationTP);
 
@@ -359,7 +444,9 @@ bool EQMod::updateProperties()
 	  deleteProperty(SteppersNP->name);
 	  deleteProperty(CurrentSteppersNP->name);
 	  deleteProperty(PeriodsNP->name);
-	  deleteProperty(DateNP->name);
+	  deleteProperty(JulianNP->name);
+	  deleteProperty(TimeLSTNP->name);
+	  deleteProperty(TimeUTCTP->name);
 	  deleteProperty(RAStatusLP->name);
 	  deleteProperty(DEStatusLP->name);
 	  deleteProperty(SlewSpeedsNP->name);
@@ -367,9 +454,13 @@ bool EQMod::updateProperties()
 	  deleteProperty(HemisphereSP->name);
 	  deleteProperty(TrackModeSP->name);
 	  deleteProperty(TrackRatesNP->name);
-	  deleteProperty(HorizontalCoordsNP->name);
+	  deleteProperty(HorizontalCoordNP->name);
 	  deleteProperty(PierSideSP->name);
 	  //deleteProperty(AbortMotionSP->name);
+	  deleteProperty(StandardSyncNP->name);
+	  deleteProperty(StandardSyncPointNP->name);
+	  deleteProperty(SyncPolarAlignNP->name);
+	  deleteProperty(SyncManageSP->name);
 	  MountInformationTP=NULL;
 	} 
       }
@@ -466,11 +557,12 @@ bool EQMod::ReadScopeStatus() {
   //TODO use dt to track mount desynchronisation/inactivity?
   
   // Time
-  double juliandate=ln_get_julian_from_sys();
-  double lst=ln_get_mean_sidereal_time(juliandate); // Greenwich mean (precession nut/obliq)  sidereal time of today's julian date
-  double datevalues[2];
+  double juliandate;
+  double lst; 
+  //double datevalues[2];
   char hrlst[12];
-  const char *datenames[]={"LST", "JULIAN"};
+  char hrutc[32];
+  const char *datenames[]={"LST", "JULIANDATE", "UTC"};
   const char *piersidenames[]={"EAST", "WEST"};
   ISState piersidevalues[2];
   double periods[2];
@@ -479,19 +571,26 @@ bool EQMod::ReadScopeStatus() {
   const char *horiznames[2]={"AZ", "ALT"};
   double steppervalues[2];
   const char *steppernames[]={"RAStepsCurrent", "DEStepsCurrent"};
-
-
-  lst+=(IUFindNumber(&LocationNV, "LONG")->value /15.0); // add longitude ha of observer
-  lst=range24(lst);
+  
+  juliandate=getJulianDate();
+  lst=getLst(juliandate, getLongitude()); 
   
   fs_sexa(hrlst, lst, 2, 360000);
   hrlst[11]='\0';
   DEBUGF(Logger::DBG_SCOPE_STATUS, "Compute local time: lst=%2.8f (%s) - julian date=%8.8f", lst, hrlst, juliandate); 
   //DateNP->s=IPS_BUSY;
-  datevalues[0]=lst; datevalues[1]=juliandate;
-  IUUpdateNumber(DateNP, datevalues, (char **)datenames, 2);
-  DateNP->s=IPS_OK;
-  IDSetNumber(DateNP, NULL); 
+  //datevalues[0]=lst; datevalues[1]=juliandate;
+  IUUpdateNumber(TimeLSTNP, &lst, (char **)(datenames), 1);
+  TimeLSTNP->s=IPS_OK;
+  IDSetNumber(TimeLSTNP, NULL); 
+  IUUpdateNumber(JulianNP, &juliandate, (char **)(datenames  +1), 1);
+  JulianNP->s=IPS_OK;
+  IDSetNumber(JulianNP, NULL); 
+  strftime(IUFindText(TimeUTCTP, "UTC")->text, 32, "%Y-%m-%dT%H:%M:%S", &utc);
+  //IUUpdateText(TimeUTCTP, (char **)(&hrutc), (char **)(datenames  +2), 1);
+  TimeUTCTP->s=IPS_OK;
+  IDSetText(TimeUTCTP, NULL);
+ 
   try {
     currentRAEncoder=mount->GetRAEncoder();
     currentDEEncoder=mount->GetDEEncoder();
@@ -499,7 +598,7 @@ bool EQMod::ReadScopeStatus() {
     EncodersToRADec(currentRAEncoder, currentDEEncoder, lst, &currentRA, &currentDEC, &currentHA);
     alignedRA=currentRA; alignedDEC=currentDEC;
     if (align) 
-      align->GetAlignedCoords(lst, currentRA, currentDEC, &alignedRA, &alignedDEC);
+      align->GetAlignedCoords(syncdata, juliandate, &lnobserver, currentRA, currentDEC, &alignedRA, &alignedDEC);
     else {
       if (syncdata.lst != 0.0) {
 	alignedRA += syncdata.deltaRA;
@@ -509,12 +608,14 @@ bool EQMod::ReadScopeStatus() {
     NewRaDec(alignedRA, alignedDEC);
     lnradec.ra =(alignedRA * 360.0) / 24.0;
     lnradec.dec =alignedDEC;
-    ln_get_hrz_from_equ_sidereal_time(&lnradec, &lnobserver, lst, &lnaltaz);
+    /* uses sidereal time, not local sidereal time */
+    /*ln_get_hrz_from_equ_sidereal_time(&lnradec, &lnobserver, lst, &lnaltaz);*/
+    ln_get_hrz_from_equ(&lnradec, &lnobserver, juliandate, &lnaltaz);
     /* libnova measures azimuth from south towards west */
     horizvalues[0]=range360(lnaltaz.az + 180);
     horizvalues[1]=lnaltaz.alt;
-    IUUpdateNumber(HorizontalCoordsNP, horizvalues, (char **)horiznames, 2);
-    IDSetNumber(HorizontalCoordsNP, NULL);
+    IUUpdateNumber(HorizontalCoordNP, horizvalues, (char **)horiznames, 2);
+    IDSetNumber(HorizontalCoordNP, NULL);
 
     /* TODO should we consider currentHA after alignment ? */
     pierside=SideOfPier(currentHA);
@@ -761,15 +862,16 @@ void EQMod::EncoderTarget(GotoParams *g)
 {
   double r, d;
   double ha=0.0, targetra=0.0;
-  double juliandate=ln_get_julian_from_sys();
-  double lst=ln_get_mean_sidereal_time(juliandate);
+  double juliandate;
+  double lst;
   PierSide targetpier;
   unsigned long targetraencoder=0, targetdecencoder=0;
   bool outsidelimits=false;
   r = g->ratarget; d = g->detarget;
+    
+  juliandate=getJulianDate();
+  lst=getLst(juliandate, getLongitude()); 
   
-  lst+=(IUFindNumber(&LocationNV, "LONG")->value /15.0); // add longitude ha of observer
-  lst=range24(lst);
   ha = rangeHA(r - lst);
   if (ha < 0.0) {// target EAST
     if (g->forcecwup) {
@@ -856,12 +958,12 @@ double EQMod::GetDETrackRate()
 
 bool EQMod::Goto(double r,double d)
 {
-  double juliandate=ln_get_julian_from_sys();
-  double lst=ln_get_mean_sidereal_time(juliandate);
+  double juliandate;
+  double lst;
 
-  lst+=(IUFindNumber(&LocationNV, "LONG")->value /15.0); // add longitude ha of observer
-  lst=range24(lst);
-
+  juliandate=getJulianDate();
+  lst=getLst(juliandate, getLongitude()); 
+ 
   DEBUGF(Logger::DBG_SESSION,"Starting Goto RA=%g DE=%g (current RA=%g DE=%g)", r, d, currentRA, currentDEC);
     targetRA=r;
     targetDEC=d;
@@ -870,15 +972,16 @@ bool EQMod::Goto(double r,double d)
     // Compute encoder targets and check RA limits if forced
     bzero(&gotoparams, sizeof(gotoparams));
     gotoparams.ratarget = r;  gotoparams.detarget = d;
+    gotoparams.racurrent = currentRA; gotoparams.decurrent = currentDEC;
     if (align) 
-      align->AlignGoto(lst, &gotoparams.ratarget, &gotoparams.detarget);
+      align->AlignGoto(syncdata, juliandate, &lnobserver, &gotoparams.ratarget, &gotoparams.detarget);
     else {
       if (syncdata.lst != 0.0) {
 	gotoparams.ratarget -= syncdata.deltaRA;
 	gotoparams.detarget -= syncdata.deltaDEC;
       }
     }
-    gotoparams.racurrent = currentRA; gotoparams.decurrent = currentDEC;
+
     gotoparams.racurrentencoder = currentRAEncoder; gotoparams.decurrentencoder = currentDEEncoder;
     gotoparams.completed = false; 
     gotoparams.checklimits = true; 
@@ -938,37 +1041,89 @@ bool EQMod::Park()
 
 bool EQMod::Sync(double ra,double dec)
 {
-  double juliandate=ln_get_julian_from_sys();
-  double lst=ln_get_mean_sidereal_time(juliandate);
+  double juliandate;
+  double lst;
+  SyncData tmpsyncdata;
+  double ha, targetra;
+  PierSide targetpier;
+  
+// get current mount position asap
+  tmpsyncdata.telescopeRAEncoder=mount->GetRAEncoder();
+  tmpsyncdata.telescopeDECEncoder=mount->GetDEEncoder();
+
+  juliandate=getJulianDate();
+  lst=getLst(juliandate, getLongitude()); 
 
   if (TrackState != SCOPE_TRACKING) {
     //EqReqNV.s=IPS_IDLE;
-    EqNV.s=IPS_IDLE;
+    EqNV.s=IPS_ALERT;
     //IDSetNumber(&EqReqNV, NULL);
     IDSetNumber(&EqNV, NULL);
     DEBUG(Logger::DBG_WARNING,"Syncs are allowed only when Tracking");
     return false;
   }
-  lst+=(IUFindNumber(&LocationNV, "LONG")->value /15.0); // add longitude ha of observer
-  lst=range24(lst);
-  syncdata.lst=lst;
-  syncdata.jd=juliandate;
-  syncdata.targetRA=ra;
-  syncdata.targetDEC=dec;
+  /* remember the two last syncs to compute Polar alignment */
+  syncdata2=syncdata;
+  tmpsyncdata.lst=lst;
+  tmpsyncdata.jd=juliandate;
+  tmpsyncdata.targetRA=ra;
+  tmpsyncdata.targetDEC=dec;
+
+  ha = rangeHA(ra - lst);
+  if (ha < 0.0) {// target EAST
+    if (Hemisphere == NORTH) targetpier = WEST; else targetpier = EAST;
+    targetra = range24(ra - 12.0);
+  } else {
+    if (Hemisphere == NORTH) targetpier = EAST; else targetpier = WEST;
+    targetra = ra;
+  }
+  tmpsyncdata.targetRAEncoder=EncoderFromRA(targetra, 0.0, lst, zeroRAEncoder, totalRAEncoder, Hemisphere);
+  tmpsyncdata.targetDECEncoder==EncoderFromDec(dec, targetpier, zeroDEEncoder, totalDEEncoder, Hemisphere);
+
   try {
-    EncodersToRADec(mount->GetRAEncoder(), mount->GetDEEncoder(), lst, &syncdata.telescopeRA, &syncdata.telescopeDEC, NULL);
+    EncodersToRADec( tmpsyncdata.telescopeRAEncoder, tmpsyncdata.telescopeDECEncoder, lst, &tmpsyncdata.telescopeRA, &tmpsyncdata.telescopeDEC, NULL);
   } catch(EQModError e) {
     return(e.DefaultHandleException(this));
   }    
 
-  syncdata.deltaRA = syncdata.targetRA - syncdata.telescopeRA;
-  syncdata.deltaDEC= syncdata.targetDEC - syncdata.telescopeDEC;
+
+  tmpsyncdata.deltaRA = tmpsyncdata.targetRA - tmpsyncdata.telescopeRA;
+  tmpsyncdata.deltaDEC= tmpsyncdata.targetDEC - tmpsyncdata.telescopeDEC;
+  tmpsyncdata.deltaRAEncoder = tmpsyncdata.targetRAEncoder - tmpsyncdata.telescopeRAEncoder;
+  tmpsyncdata.deltaDECEncoder= tmpsyncdata.targetDECEncoder - tmpsyncdata.telescopeDECEncoder;
+
+  if (align && !align->isStandardSync()) {
+    align->AlignSync(syncdata, tmpsyncdata);
+    return true;
+  }
+  if (align && align->isStandardSync())
+    align->AlignStandardSync(syncdata, &tmpsyncdata, &lnobserver);
+  syncdata=tmpsyncdata;
+
+  IUFindNumber(StandardSyncNP, "STANDARDSYNC_RA")->value=syncdata.deltaRA;
+  IUFindNumber(StandardSyncNP, "STANDARDSYNC_DE")->value=syncdata.deltaDEC;
+  IDSetNumber(StandardSyncNP, NULL);
+  IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_JD")->value=juliandate;
+  IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_SYNCTIME")->value=lst;
+  IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_CELESTIAL_RA")->value=syncdata.targetRA;;
+  IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_CELESTIAL_DE")->value=syncdata.targetDEC;;
+  IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_RA")->value=syncdata.telescopeRA;;
+  IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_DE")->value=syncdata.telescopeDEC;;
+  IDSetNumber(StandardSyncPointNP, NULL);
   //EqReqNV.s=IPS_IDLE;
   //EqNV.s=IPS_OK;
   //IDSetNumber(&EqReqNV, NULL);
-  if (align) align->AlignSync(syncdata.lst, syncdata.jd, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
+
   DEBUGF(Logger::DBG_SESSION, "Mount Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
   //IDLog("Mount Synced (deltaRA = %.6f deltaDEC = %.6f)\n", syncdata.deltaRA, syncdata.deltaDEC);
+  if (syncdata2.lst!=0.0) {
+    computePolarAlign(syncdata, syncdata2, getLatitude(), &tpa_alt, &tpa_az);
+    IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_ALT")->value=tpa_alt;
+    IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_AZ")->value=tpa_az;
+    IDSetNumber(SyncPolarAlignNP, NULL); 
+    IDLog("computePolarAlign: Telescope Polar Axis: alt = %g, az = %g\n", tpa_alt, tpa_az);
+  }
+  
   return true;
 }
 
@@ -1130,7 +1285,7 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 	      else SetSouthernHemisphere(false);
 	    }
 	  }   
-	  DEBUGF(Logger::DBG_SESSION,"Changed observer: long = %f lat = %f", lnobserver.lng, lnobserver.lat);
+	  DEBUGF(Logger::DBG_SESSION,"Changed observer: long = %g lat = %g", lnobserver.lng, lnobserver.lat);
 	  return true;
 	}
       
@@ -1256,6 +1411,36 @@ bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	  }   
 	  return true;	
 	}
+
+      if (!strcmp(name, "SYNCMANAGE"))
+	{
+	  ISwitchVectorProperty *svp = getSwitch(name);
+	  IUUpdateSwitch(svp, states, names, n);
+	  ISwitch *sp = IUFindOnSwitch(svp);
+	  if (!sp)
+	    return false;
+	  IDSetSwitch(svp, NULL);
+
+	  if (!strcmp(sp->name, "SYNCCLEARDELTA")) {
+	    bzero(&syncdata, sizeof(syncdata));
+	    bzero(&syncdata2, sizeof(syncdata2));
+	    IUFindNumber(StandardSyncNP, "STANDARDSYNC_RA")->value=syncdata.deltaRA;
+	    IUFindNumber(StandardSyncNP, "STANDARDSYNC_DE")->value=syncdata.deltaDEC;
+	    IDSetNumber(StandardSyncNP, NULL);
+	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_JD")->value=syncdata.jd;
+	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_SYNCTIME")->value=syncdata.lst;
+	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_CELESTIAL_RA")->value=syncdata.targetRA;;
+	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_CELESTIAL_DE")->value=syncdata.targetDEC;;
+	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_RA")->value=syncdata.telescopeRA;;
+	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_DE")->value=syncdata.telescopeDEC;;
+	    IDSetNumber(StandardSyncPointNP, NULL);
+	    DEBUG(Logger::DBG_SESSION, "Cleared current Sync Data");
+	    IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_ALT")->value=tpa_alt;
+	    IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_AZ")->value=tpa_az;
+	    IDSetNumber(SyncPolarAlignNP, NULL); 
+	    return true;
+	  }
+	}
     }
 
     if (align) { compose=align->ISNewSwitch(dev,name,states,names,n); if (compose) return true;}
@@ -1277,7 +1462,33 @@ bool EQMod::ISNewText (const char *dev, const char *name, char *texts[], char *n
   bool compose;
   if(strcmp(dev,getDeviceName())==0)
     {
+      if(strcmp(name,"TIME_UTC")==0)
+	{
+	  int utcindex=0;
+	  struct ln_date lndatetry;
+	  if (strcmp(names[utcindex], "UTC")) utcindex=1;
+	  if (extractISOTime(texts[utcindex], &lndatetry) == -1) {
+	    TimeUTCTP->s = IPS_ALERT;
+	    DEBUGF(Logger::DBG_ERROR, "Can not set UTC Time: %s", texts[utcindex]);
+	    return false;
+	  }
+	  lndate = lndatetry;
+	  utc.tm_sec = lndate.seconds;
+	  utc.tm_min= lndate.minutes;
+	  utc.tm_hour = lndate.hours;
+	  utc.tm_mday = lndate.days;
+	  utc.tm_mon = lndate.months -1;
+	  utc.tm_year = lndate.years - 1900;
 
+	  gettimeofday(&lasttimeupdate, NULL);
+
+	  IUUpdateText(TimeUTCTP, texts, names, n);
+	  TimeUTCTP->s = IPS_OK;
+	  IDSetText(TimeUTCTP, NULL);
+	  DEBUGF(Logger::DBG_SESSION, "Setting UTC Time to %s, Offset %s", 
+		      IUFindText(TimeUTCTP,"UTC")->text, IUFindText(TimeUTCTP,"OFFSET")->text);
+	  return true;
+	}
     }
   if (align) { compose=align->ISNewText(dev,name,texts,names,n); if (compose) return true;}
 
@@ -1554,4 +1765,84 @@ void EQMod::timedguideWECallback(void *userpointer) {
   IDSetNumber(&(p->GuideEWP), NULL);
   DEBUGDEVICE(p->getDeviceName(), Logger::DBG_SESSION, "End Timed guide West/East");
   IERmTimer(p->GuideTimerWE);
+}
+
+void EQMod::computePolarAlign(SyncData s1, SyncData s2, double lat, double *tpaalt, double *tpaaz)
+/*
+From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
+ */
+{
+  double delta1, alpha1, delta2, alpha2; 
+  double d1, d2; /* corrected delta1/delta2 */
+  double cdelta1, calpha1, cdelta2, calpha2;
+  double Delta;
+  double cosDelta1, cosDelta2;
+  double cosd2md1, cosd2pd1, d2pd1;
+  double tpadelta, tpaalpha;
+  double sintpadelta, costpaalpha, sintpaalpha;
+  double cosama1, cosama2;
+  double cosaz, sinaz;
+  double beta;
+
+  alpha1 = ln_deg_to_rad((s1.telescopeRA - s1.lst) * 360.0 / 24.0);
+  delta1 = ln_deg_to_rad(s1.telescopeDEC);
+  alpha2 = ln_deg_to_rad((s2.telescopeRA - s2.lst) * 360.0 / 24.0);
+  delta2 = ln_deg_to_rad(s2.telescopeDEC);
+  calpha1 = ln_deg_to_rad((s1.targetRA - s1.lst) * 360.0 / 24.0);
+  cdelta1 = ln_deg_to_rad(s1.targetDEC);
+  calpha2 = ln_deg_to_rad((s2.targetRA - s2.lst) * 360.0 / 24.0);
+  cdelta2 = ln_deg_to_rad(s2.targetDEC);
+
+  cosDelta1=sin(cdelta1) * sin(cdelta2) + (cos(cdelta1) * cos(cdelta2) * cos(calpha2 - calpha1));
+  cosDelta2=sin(delta1) * sin(delta2) + (cos(delta1) * cos(delta2) * cos(alpha2 - alpha1));
+
+  if (cosDelta1 != cosDelta2) 
+    DEBUGF(Logger::DBG_DEBUG, "PolarAlign -- Telescope axes are not perpendicular. Angular distances are:celestial=%g telescope=%g\n", acos(cosDelta1), acos(cosDelta2));
+  Delta = acos(cosDelta1);
+    DEBUGF(Logger::DBG_DEBUG, "Angular distance of the two stars is %g\n", Delta);
+
+  //cosd2md1 = sin(delta1) * sin(delta2) + cos(delta1) * cos(delta2);
+  cosd2pd1 = ((cos(delta2 - delta1) * (1 + cos(alpha2 - alpha1))) - (2.0 * cosDelta1)) / (1 - cos(alpha2 - alpha1));
+  d2pd1=acos(cosd2pd1);
+  if (delta2 * delta1 > 0.0) {/* same sign */
+    if (delta1 < 0.0) d2pd1 = -d2pd1;
+  } else {
+    if (fabs(delta1) > fabs(delta2)) {
+      if (delta1 < 0.0) d2pd1 = -d2pd1;
+    } else {
+      if (delta2 < 0.0) d2pd1 = -d2pd1;
+    }
+  }
+      
+  d2 = (d2pd1 + delta2 - delta1) / 2.0;
+  d1 = d2pd1 - d2;
+  DEBUGF(Logger::DBG_DEBUG,"Computed delta1 = %g (%g) delta2 = %g (%g)\n", d1, delta1, d2, delta2);
+
+  delta1 = d1;
+  delta2 = d2;
+
+  sintpadelta = (sin(delta1) * sin(cdelta1)) + (sin(delta2) * sin(cdelta2))
+    - cosDelta1 * ((sin(delta1) * sin(cdelta2)) + (sin(cdelta1) * sin(delta2)))
+    + (cos(delta1) * cos(delta2) *  sin(alpha2 - alpha1)  * cos(cdelta1) * cos(cdelta2) *  sin(calpha2 - calpha1));
+  sintpadelta = sintpadelta / (sin(Delta) * sin(Delta));
+  tpadelta = asin(sintpadelta);
+  cosama1 = (sin(delta1) - (sin(cdelta1) * sintpadelta)) / (cos(cdelta1) * cos(tpadelta));
+  cosama2 = (sin(delta2) - (sin(cdelta2) * sintpadelta)) / (cos(cdelta2) * cos(tpadelta));
+
+  costpaalpha = (sin(calpha2) * cosama1 - sin(calpha1) * cosama2) / sin(calpha2 - calpha1);
+  sintpaalpha = (cos(calpha2) * cosama1 - cos(calpha1) * cosama2) / sin(calpha2 - calpha1);
+  tpaalpha = acos(costpaalpha);
+  if (sintpaalpha < 0) tpaalpha = 2 * M_PI - tpaalpha;
+  DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (rad): delta = %g alpha = %g\n", tpadelta, tpaalpha);
+
+  beta = ln_deg_to_rad(lat);
+  *tpaalt = asin(sin(tpadelta) * sin(beta) + (cos(tpadelta) * cos(beta) * cos(tpaalpha)));
+  cosaz = (sin(tpadelta) - (sin(*tpaalt) * sin(beta))) / (cos(*tpaalt) * cos(beta));
+  sinaz = (cos(tpadelta) * sin(tpaalpha)) / cos(*tpaalt);
+  *tpaaz = acos(cosaz);
+  if (sinaz < 0) *tpaaz = 2 * M_PI - *tpaaz;
+  *tpaalt=ln_rad_to_deg(*tpaalt);
+  *tpaaz = ln_rad_to_deg(*tpaaz);
+  DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (deg): alt = %g az = %g\n", *tpaalt, *tpaaz);    
+  
 }

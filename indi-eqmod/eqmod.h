@@ -29,6 +29,17 @@
 #include "simulator/simulator.h"
 #endif
 
+	typedef struct SyncData {
+	  double lst,jd;
+	  double targetRA, targetDEC;
+	  double telescopeRA, telescopeDEC;
+	  double deltaRA, deltaDEC;
+	  unsigned long targetRAEncoder, targetDECEncoder;
+	  unsigned long telescopeRAEncoder, telescopeDECEncoder;
+	  long deltaRAEncoder, deltaDECEncoder;
+	} SyncData;
+
+
 class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 {
     protected:
@@ -46,11 +57,18 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
         double targetDEC;
 	TelescopeStatus RememberTrackState;
         bool Parked;
+	
 	/* for use with libnova */
 	struct ln_equ_posn lnradec;
 	struct ln_lnlat_posn lnobserver; 
 	struct ln_hrz_posn lnaltaz;
         
+	/* Time variables */
+	struct tm utc;
+	struct ln_date lndate;
+	struct timeval lasttimeupdate;
+	double juliandate;
+
 	int GuideTimerNS;
 
 	int GuideTimerWE;
@@ -62,7 +80,9 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	INumberVectorProperty *SteppersNP;
 	INumberVectorProperty *CurrentSteppersNP;
 	INumberVectorProperty *PeriodsNP;
-	INumberVectorProperty *DateNP;
+	INumberVectorProperty *JulianNP;
+	INumberVectorProperty *TimeLSTNP;
+	ITextVectorProperty *TimeUTCTP;
 	ILightVectorProperty *RAStatusLP;
 	ILightVectorProperty *DEStatusLP;
 	INumberVectorProperty *SlewSpeedsNP;
@@ -72,7 +92,12 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	ISwitchVectorProperty *TrackModeSP;
        	INumberVectorProperty *TrackRatesNP;
 	//ISwitchVectorProperty *AbortMotionSP;
-	INumberVectorProperty *HorizontalCoordsNP;
+	INumberVectorProperty *HorizontalCoordNP;
+	INumberVectorProperty *StandardSyncNP;
+	INumberVectorProperty *StandardSyncPointNP;
+	INumberVectorProperty *SyncPolarAlignNP;
+	ISwitchVectorProperty *SyncManageSP;
+
 
 	enum Hemisphere {NORTH=0, SOUTH=1 };
 	enum PierSide {WEST=0, EAST=1};
@@ -83,19 +108,15 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	  unsigned int iterative_count;
 	  bool forcecwup, checklimits, outsidelimits, completed;
 	} GotoParams;
-	typedef struct SyncData {
-	  double lst,jd;
-	  double targetRA, targetDEC;
-	  double telescopeRA, telescopeDEC;
-	  double deltaRA, deltaDEC;
-	} SyncData;
 
 	Hemisphere Hemisphere;
 	PierSide pierside;
 	bool RAInverted, DEInverted;
 	bool isParked;
         GotoParams gotoparams;
-	SyncData syncdata;
+	SyncData syncdata, syncdata2;
+
+	double tpa_alt, tpa_az;
 
 	void EncodersToRADec(unsigned long rastep, unsigned long destep, double lst, double *ra, double *de, double *ha);
 	double EncoderToHours(unsigned long destep, unsigned long initdestep, unsigned long totalrastep, enum Hemisphere h);
@@ -122,6 +143,9 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 
 	void setLogDebug (bool enable);
 	void setStepperSimulation (bool enable);
+
+	void computePolarAlign(SyncData s1, SyncData s2, double lat, double *tpaalt, double *tpaaz);
+
     public:
         EQMod();
         virtual ~EQMod();
@@ -157,9 +181,13 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 
 	double getLongitude();
 	double getLatitude();
+	double getJulianDate();
+	double getLst(double jd, double lng);
+
 #ifdef WITH_SIMULATOR
 	EQModSimulator *simulator;
 #endif
+
 };
 
 #endif // EQMOD_H
