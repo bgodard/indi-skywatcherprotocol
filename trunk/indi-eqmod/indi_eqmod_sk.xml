@@ -194,7 +194,7 @@ Off
 0.0
 </defNumber>
 </defNumberVector>
-<defNumberVector device="EQMod Mount" name="STANDARDSYNCPOINT" label="Sync Data" group="Sync" state="Idle" perm="ro">
+<defNumberVector device="EQMod Mount" name="STANDARDSYNCPOINT" label="Sync Data" group="Sync" state="Idle" perm="rw">
 <defNumber name="STANDARDSYNCPOINT_JD" label="Sync Date" format="%08.8f" min="0.0" max="9999999999" step="0.0">
 0.0
 </defNumber>
