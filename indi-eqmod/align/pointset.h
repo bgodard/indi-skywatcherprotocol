@@ -44,6 +44,7 @@ class PointSet
     HtmID htmID;
     HtmName htmname;
     double celestialALT, celestialAZ, telescopeALT, telescopeAZ;
+    double cx, cy ,cz;
     AlignData aligndata;
   } Point;
   typedef struct Distance {
@@ -67,7 +68,8 @@ class PointSet
   double lat, lon, alt;
   double range24(double r);
   double range360(double r);
-  void AltAzFromRaDec(double ra, double dec, double lst, double *alt, double *az, struct ln_lnlat_posn *pos);
+  void AltAzFromRaDec(double ra, double dec, double jd, double *alt, double *az, struct ln_lnlat_posn *pos);
+  void AltAzFromRaDecSidereal(double ra, double dec, double lst, double *alt, double *az, struct ln_lnlat_posn *pos);
   void RaDecFromAltAz(double alt, double az, double jd, double *ra, double *dec, struct ln_lnlat_posn *pos) ;
  protected:
  private:

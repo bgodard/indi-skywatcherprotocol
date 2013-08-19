@@ -62,6 +62,22 @@ void PointSet::AltAzFromRaDec(double ra, double dec, double jd, double *alt, dou
 
 }
 
+void PointSet::AltAzFromRaDecSidereal(double ra, double dec, double lst, double *alt, double *az, struct ln_lnlat_posn *pos) 
+{
+  struct ln_equ_posn lnradec;
+  struct ln_lnlat_posn lnpos; 
+  struct ln_hrz_posn lnaltaz;
+  lnradec.ra=(ra * 360.0) /24.0; lnradec.dec=dec;
+  if (pos) { lnpos.lng = pos->lng; lnpos.lat = pos->lat; 
+  } else { 
+    lnpos.lng = IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value; 
+    lnpos.lat = IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value; 
+  }
+
+  ln_get_hrz_from_equ_sidereal_time(&lnradec, &lnpos, lst, &lnaltaz);
+  *alt=lnaltaz.alt; *az=range360(lnaltaz.az + 180.0); 
+
+}
 void PointSet::RaDecFromAltAz(double alt, double az, double jd, double *ra, double *dec, struct ln_lnlat_posn *pos) 
 {
   struct ln_equ_posn lnradec;
@@ -125,20 +141,41 @@ void PointSet::AddPoint(AlignData aligndata, struct ln_lnlat_posn *pos)
 
   Point point;
   point.aligndata = aligndata;
+  double horangle, altangle;
   //point.celestialAZ = (range24(point.aligndata.lst - point.aligndata.targetRA - 12.0) * 360.0) / 24.0;
   //point.telescopeAZ = (range24(point.aligndata.lst - point.aligndata.telescopeRA - 12.0) * 360.0) / 24.0;
   //point.celestialALT = point.aligndata.targetDEC + lat;
   //point.telescopeALT = point.aligndata.telescopeDEC + lat;
-  AltAzFromRaDec(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.jd, 
-		 &point.celestialALT, &point.celestialAZ, pos);
-  AltAzFromRaDec(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.jd, 
-		 &point.telescopeALT, &point.telescopeAZ, pos);
+  if (point.aligndata.jd > 0.0)
+    AltAzFromRaDec(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.jd, 
+		   &point.celestialALT, &point.celestialAZ, pos);
+  else
+    AltAzFromRaDecSidereal(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.lst, 
+		   &point.celestialALT, &point.celestialAZ, pos);
+  horangle = range360(-180.0 - point.celestialAZ) * M_PI / 180.0;
+  altangle =  point.celestialALT * M_PI / 180.0;
+  point.cx = cos(altangle) * cos(horangle);
+  point.cy = cos(altangle) * sin(horangle);
+  point.cz = sin(altangle);
+  if (point.aligndata.jd > 0.0)
+    AltAzFromRaDec(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.jd, 
+		   &point.telescopeALT, &point.telescopeAZ, pos);
+  else
+    AltAzFromRaDecSidereal(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.lst, 
+		   &point.telescopeALT, &point.telescopeAZ, pos);
   point.htmID=cc_radec2ID(point.celestialAZ, point.celestialALT, 19);
   cc_ID2name(point.htmname,  point.htmID);
   IDLog("Adding sync point htm id = %lld htm name = %s\n ", point.htmID, point.htmname);
   PointSetMap->insert(std::pair<HtmID, Point>(point.htmID, point));
   IDLog("       sync point celestial alt = %g az = %g\n ", point.celestialALT, point.celestialAZ);
   IDLog("       sync point telescope alt = %g az = %g\n ", point.telescopeALT, point.telescopeAZ);
+  // compute new Delaunay triangulation of the points on the unit sphere
+  //  http://objectmix.com/graphics/242663-delaunay-triangulation-sphere-minimal-code.html
+  // DT is equivalent to convex hull in this case, simply remove triangles/faces that are visible from origin 
+  std::map<HtmID, Point>::iterator it;
+  for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
+    IDLog("%f %f %f\n", it->second.cx, it->second.cy, it->second.cz);
+  }
 }
 
 PointSet::Point *PointSet::getPoint(HtmID htmid) {
@@ -223,6 +260,7 @@ char *PointSet::LoadDataFile(const char *filename)
   lnalignpos->lng=lon; lnalignpos->lat=lat;
   PointSetMap->clear();
   alignxml=nextXMLEle(sitexml, 1);
+  aligndata.jd=-1.0;
   while (alignxml) {
     //IDLog("synctime %s\n", pcdataXMLEle(findXMLEle(alignxml, "synctime")));
     sscanf(pcdataXMLEle(findXMLEle(alignxml, "synctime")), " %lf ", &aligndata.lst);

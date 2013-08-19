@@ -197,7 +197,7 @@ EQMod::EQMod()
   
   /* initialize time */
   tzset();
-  gettimeofday(&lasttimeupdate, NULL);
+  gettimeofday(&lasttimeupdate, NULL); // takes care of DST 
   gmtime_r(&lasttimeupdate.tv_sec, &utc);
   lndate.seconds = utc.tm_sec + ((double)lasttimeupdate.tv_usec / 1000000);
   lndate.minutes = utc.tm_min;
@@ -205,7 +205,7 @@ EQMod::EQMod()
   lndate.days = utc.tm_mday;
   lndate.months = utc.tm_mon + 1;
   lndate.years = utc.tm_year + 1900;
-
+  //IDLog("Setting UTC in constructor: %s", asctime(&utc));
   /* initialize random seed: */
   srand ( time(NULL) );
 }
@@ -266,7 +266,10 @@ double EQMod::getJulianDate()
   lndate.seconds += (difftime.tv_sec + (difftime.tv_usec / 1000000));
   usecs=lndate.seconds - floor(lndate.seconds);
   utc.tm_sec=lndate.seconds;
+  utc.tm_isdst = -1; // let mktime find if DST already in effect in utc
+  //IDLog("Get julian: setting UTC secs to %f", utc.tm_sec); 
   mktime(&utc); // normalize time
+  //IDLog("Get Julian; UTC is now %s", asctime(&utc));
   ln_get_date_from_tm(&utc, &lndate);
   lndate.seconds+=usecs;
   lasttimeupdate = currenttime;
@@ -601,8 +604,15 @@ bool EQMod::ReadScopeStatus() {
       align->GetAlignedCoords(syncdata, juliandate, &lnobserver, currentRA, currentDEC, &alignedRA, &alignedDEC);
     else {
       if (syncdata.lst != 0.0) {
+	// should check values are in range!
 	alignedRA += syncdata.deltaRA;
 	alignedDEC += syncdata.deltaDEC;
+	if (alignedDEC > 90.0 || alignedDEC < 90.0) {
+	  alignedRA += 12.00;
+	  if (alignedDEC > 0.0) alignedDEC = 180.0 - alignedDEC;
+	  else alignedDEC = -180.0 - alignedDEC;
+	}
+	alignedRA=range24(alignedRA);
       }
     }
     NewRaDec(alignedRA, alignedDEC);
@@ -1063,7 +1073,7 @@ bool EQMod::Sync(double ra,double dec)
     return false;
   }
   /* remember the two last syncs to compute Polar alignment */
-  syncdata2=syncdata;
+
   tmpsyncdata.lst=lst;
   tmpsyncdata.jd=juliandate;
   tmpsyncdata.targetRA=ra;
@@ -1098,6 +1108,7 @@ bool EQMod::Sync(double ra,double dec)
   }
   if (align && align->isStandardSync())
     align->AlignStandardSync(syncdata, &tmpsyncdata, &lnobserver);
+  syncdata2=syncdata;
   syncdata=tmpsyncdata;
 
   IUFindNumber(StandardSyncNP, "STANDARDSYNC_RA")->value=syncdata.deltaRA;
@@ -1288,6 +1299,40 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 	  DEBUGF(Logger::DBG_SESSION,"Changed observer: long = %g lat = %g", lnobserver.lng, lnobserver.lat);
 	  return true;
 	}
+     if(strcmp(name,"STANDARDSYNCPOINT")==0)
+       {
+	 syncdata2=syncdata;
+	 bzero(&syncdata, sizeof(syncdata));
+	 IUUpdateNumber(StandardSyncPointNP, values, names,n);
+	 StandardSyncPointNP->s = IPS_OK;
+
+	 syncdata.jd=IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_JD")->value;
+	 syncdata.lst=IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_SYNCTIME")->value;
+	 syncdata.targetRA=IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_CELESTIAL_RA")->value;
+	 syncdata.targetDEC=IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_CELESTIAL_DE")->value;
+	 syncdata.telescopeRA=IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_RA")->value;
+	 syncdata.telescopeDEC=IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_DE")->value;
+	 syncdata.deltaRA = syncdata.targetRA - syncdata.telescopeRA;
+	 syncdata.deltaDEC = syncdata.targetDEC - syncdata.telescopeDEC;
+	 IDSetNumber(StandardSyncPointNP, NULL);
+	 IUFindNumber(StandardSyncNP, "STANDARDSYNC_RA")->value=syncdata.deltaRA;
+	 IUFindNumber(StandardSyncNP, "STANDARDSYNC_DE")->value=syncdata.deltaDEC;
+	 IDSetNumber(StandardSyncNP, NULL);
+
+	 DEBUGF(Logger::DBG_SESSION, "Mount manually Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
+	 //IDLog("Mount Synced (deltaRA = %.6f deltaDEC = %.6f)\n", syncdata.deltaRA, syncdata.deltaDEC);
+	 if (syncdata2.lst!=0.0) {
+	   computePolarAlign(syncdata, syncdata2, getLatitude(), &tpa_alt, &tpa_az);
+	   IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_ALT")->value=tpa_alt;
+	   IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_AZ")->value=tpa_az;
+	   IDSetNumber(SyncPolarAlignNP, NULL); 
+	   IDLog("computePolarAlign: Telescope Polar Axis: alt = %g, az = %g\n", tpa_alt, tpa_az);
+	 }	    
+
+	 return true;
+
+       }
+
       
     }
 
@@ -1435,6 +1480,7 @@ bool EQMod::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	    IUFindNumber(StandardSyncPointNP, "STANDARDSYNCPOINT_TELESCOPE_DE")->value=syncdata.telescopeDEC;;
 	    IDSetNumber(StandardSyncPointNP, NULL);
 	    DEBUG(Logger::DBG_SESSION, "Cleared current Sync Data");
+	    tpa_alt=0.0; tpa_az=0.0;
 	    IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_ALT")->value=tpa_alt;
 	    IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_AZ")->value=tpa_az;
 	    IDSetNumber(SyncPolarAlignNP, NULL); 
@@ -1485,6 +1531,7 @@ bool EQMod::ISNewText (const char *dev, const char *name, char *texts[], char *n
 	  IUUpdateText(TimeUTCTP, texts, names, n);
 	  TimeUTCTP->s = IPS_OK;
 	  IDSetText(TimeUTCTP, NULL);
+          //IDLog("New text UTC: %s", asctime(&utc));
 	  DEBUGF(Logger::DBG_SESSION, "Setting UTC Time to %s, Offset %s", 
 		      IUFindText(TimeUTCTP,"UTC")->text, IUFindText(TimeUTCTP,"OFFSET")->text);
 	  return true;
@@ -1830,17 +1877,19 @@ From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
   cosama2 = (sin(delta2) - (sin(cdelta2) * sintpadelta)) / (cos(cdelta2) * cos(tpadelta));
 
   costpaalpha = (sin(calpha2) * cosama1 - sin(calpha1) * cosama2) / sin(calpha2 - calpha1);
-  sintpaalpha = (cos(calpha2) * cosama1 - cos(calpha1) * cosama2) / sin(calpha2 - calpha1);
-  tpaalpha = acos(costpaalpha);
-  if (sintpaalpha < 0) tpaalpha = 2 * M_PI - tpaalpha;
+  sintpaalpha = (cos(calpha1) * cosama2 - cos(calpha2) * cosama1) / sin(calpha2 - calpha1);
+  //tpaalpha = acos(costpaalpha);
+  //if (sintpaalpha < 0) tpaalpha = 2 * M_PI - tpaalpha;
+  tpaalpha=atan2(sintpaalpha, costpaalpha);
   DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (rad): delta = %g alpha = %g\n", tpadelta, tpaalpha);
 
   beta = ln_deg_to_rad(lat);
   *tpaalt = asin(sin(tpadelta) * sin(beta) + (cos(tpadelta) * cos(beta) * cos(tpaalpha)));
   cosaz = (sin(tpadelta) - (sin(*tpaalt) * sin(beta))) / (cos(*tpaalt) * cos(beta));
   sinaz = (cos(tpadelta) * sin(tpaalpha)) / cos(*tpaalt);
-  *tpaaz = acos(cosaz);
-  if (sinaz < 0) *tpaaz = 2 * M_PI - *tpaaz;
+  //*tpaaz = acos(cosaz);
+  //if (sinaz < 0) *tpaaz = 2 * M_PI - *tpaaz;
+  *tpaaz=atan2(sinaz, cosaz);
   *tpaalt=ln_rad_to_deg(*tpaalt);
   *tpaaz = ln_rad_to_deg(*tpaaz);
   DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (deg): alt = %g az = %g\n", *tpaalt, *tpaaz);    

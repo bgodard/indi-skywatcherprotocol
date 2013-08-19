@@ -309,7 +309,9 @@ void Align::AlignNStar(double jd, struct ln_lnlat_posn *position, double current
       N = invT[2][0] * l + invT[2][1] * m + invT[2][2] * n;
 
       *alignedRA = atan(M/L) * 12.0 / M_PI;
-      if (*alignedRA < 0.0) *alignedRA += 12.0;
+      //IDLog("Aligning RA = %g L=%g at LST = %g (point alt = %g az = %g)\n", *alignedRA, L, lst, pointalt, pointaz);
+      if (L < 0.0) *alignedRA += 12.0;
+      //IDLog("Aligning RA = %g at LST = %g\n", *alignedRA, lst);
       *alignedRA = pointset->range24(*alignedRA + lst);
       //if (L < 0) *alignedRA += 12.0;
       //if (*alignedRA < 0) *alignedRA = 24.0 + *alignedRA;
