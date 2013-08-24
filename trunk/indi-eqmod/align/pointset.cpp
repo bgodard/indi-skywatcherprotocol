@@ -28,7 +28,8 @@
 #include <indidevapi.h>
 
 #include "pointset.h"
-
+#include "triangulate.h"
+#include "triangulate_chull.h"
 
 double PointSet::range24(double r) {
   double res = r;
@@ -112,6 +113,10 @@ PointSet::PointSet(INDI::Telescope *t)
   lnalignpos=NULL;
 }
 
+const char *PointSet::getDeviceName()
+{
+  return telescope->getDeviceName();
+}
 
 std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *PointSet::ComputeDistances(double alt, double az, PointFilter filter) {
   std::map<HtmID, Point>::iterator it;
@@ -165,17 +170,21 @@ void PointSet::AddPoint(AlignData aligndata, struct ln_lnlat_posn *pos)
 		   &point.telescopeALT, &point.telescopeAZ, pos);
   point.htmID=cc_radec2ID(point.celestialAZ, point.celestialALT, 19);
   cc_ID2name(point.htmname,  point.htmID);
-  IDLog("Adding sync point htm id = %lld htm name = %s\n ", point.htmID, point.htmname);
+  point.index=getNbPoints();
+  //IDLog("Adding sync point index = %d htm id = %lld htm name = %s\n ", point.index, point.htmID, point.htmname);
   PointSetMap->insert(std::pair<HtmID, Point>(point.htmID, point));
-  IDLog("       sync point celestial alt = %g az = %g\n ", point.celestialALT, point.celestialAZ);
-  IDLog("       sync point telescope alt = %g az = %g\n ", point.telescopeALT, point.telescopeAZ);
+  //IDLog("       sync point celestial alt = %g az = %g\n ", point.celestialALT, point.celestialAZ);
+  //IDLog("       sync point telescope alt = %g az = %g\n ", point.telescopeALT, point.telescopeAZ);
   // compute new Delaunay triangulation of the points on the unit sphere
   //  http://objectmix.com/graphics/242663-delaunay-triangulation-sphere-minimal-code.html
   // DT is equivalent to convex hull in this case, simply remove triangles/faces that are visible from origin 
-  std::map<HtmID, Point>::iterator it;
-  for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
-    IDLog("%f %f %f\n", it->second.cx, it->second.cy, it->second.cz);
-  }
+  //std::map<HtmID, Point>::iterator it;
+  //for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
+  //IDLog("%f %f %f\n", it->second.cx, it->second.cy, it->second.cz);
+  //}
+  Triangulation->AddPoint(point.htmID);
+  DEBUGF(Logger::DBG_SESSION, "Align Pointset: added point %d alt = %g az = %g\n", point.index, point.celestialALT, point.celestialAZ);
+  DEBUGF(Logger::DBG_SESSION, "Align Triangulate: number of faces is %d\n", Triangulation->getFaces().size());
 }
 
 PointSet::Point *PointSet::getPoint(HtmID htmid) {
@@ -191,6 +200,7 @@ void PointSet::Init()
 {
   //  PointSetMap=NULL;
   PointSetMap = new std::map<HtmID, Point>();
+  Triangulation=new TriangulateCHull(PointSetMap);
   PointSetXmlRoot=NULL;
 }
 
@@ -206,6 +216,7 @@ void PointSet::Reset()
   PointSetXmlRoot=NULL;
   if (lnalignpos) free(lnalignpos);
   lnalignpos=NULL;
+  Triangulation->Reset();
 }
 
 char *PointSet::LoadDataFile(const char *filename)
@@ -252,7 +263,7 @@ char *PointSet::LoadDataFile(const char *filename)
   ap = findXMLAtt(sitexml, "alt");
   if (!ap) alt =0.0; 
   else sscanf(valuXMLAtt(ap), "%lf", &alt);
-  IDLog("Align Data for site %s (lon %f lat %f alt %f)\n", sitename, lon, lat, alt);
+  IDLog("Align: load file for site %s (lon %f lat %f alt %f)\n", sitename, lon, lat, alt);
   IDLog("  number of points: %d\n", nXMLEle(sitexml));
   //  PointSetMap = new std::map<HtmID, Point>();
   if (lnalignpos) free(lnalignpos);
@@ -262,6 +273,7 @@ char *PointSet::LoadDataFile(const char *filename)
   alignxml=nextXMLEle(sitexml, 1);
   aligndata.jd=-1.0;
   while (alignxml) {
+    if (strcmp(tagXMLEle(alignxml), "point") != 0) break;
     //IDLog("synctime %s\n", pcdataXMLEle(findXMLEle(alignxml, "synctime")));
     sscanf(pcdataXMLEle(findXMLEle(alignxml, "synctime")), " %lf ", &aligndata.lst);
     sscanf(pcdataXMLEle(findXMLEle(alignxml, "celestialra")), "%lf", &aligndata.targetRA);
@@ -297,7 +309,7 @@ char *PointSet::WriteDataFile(const char *filename)
     wordfree(&wexp);
     return strerror(errno);
   }
-  if (lnalignpos) {
+  if (lnalignpos) { // Why this ?
     if ((lnalignpos->lng != IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LONG")->value) ||
 	(lnalignpos->lat != IUFindNumber(telescope->getNumber("GEOGRAPHIC_COORD"), "LAT")->value))
       return (char *)("Can not mix alignment data from different sites (lng. and/or lat. differs)");
@@ -364,16 +376,106 @@ XMLEle *PointSet::toXML() {
   return root;
 }
 
-void PointSet::setBlobData(IBLOB *blob) {
+void PointSet::setPointBlobData(IBLOB *blob) {
   XMLEle *root;
-  char *blobxml;
-  int blobsize;
+  char *pointblobxml;
+  int rsize, pointblobsize;
   root=toXML();
-  blobsize=sprlXMLEle(root, 0);
-  blobxml=(char *)malloc((blobsize+1) * sizeof(char));
-  sprXMLEle(blobxml, root, 0);
-  blob->size=blobsize+1;
+  rsize=sprlXMLEle(root, 0);
+  pointblobsize=rsize;
+  pointblobxml=(char *)malloc((pointblobsize+1) * sizeof(char));
+  sprXMLEle(pointblobxml, root, 0);
+  blob->size=pointblobsize+1;
   blob->bloblen=blob->size;
   strcpy(blob->format, ".xml");
-  blob->blob=(void *)blobxml;
+  blob->blob=(void *)pointblobxml;
+}
+
+
+void PointSet::setTriangulationBlobData(IBLOB *blob) {
+  XMLEle *troot;
+  char *triangblobxml;
+  int tsize, triangblobsize;
+  troot=Triangulation->toXML();
+  tsize=sprlXMLEle(troot, 0);
+  triangblobsize=tsize;
+  triangblobxml=(char *)malloc((triangblobsize+1) * sizeof(char));
+  sprXMLEle(triangblobxml, troot, 0);
+  blob->size=triangblobsize+1;
+  blob->bloblen=blob->size;
+  strcpy(blob->format, ".xml");
+  blob->blob=(void *)triangblobxml;
+}
+
+void PointSet::setBlobData(IBLOBVectorProperty *bp)
+{
+  setPointBlobData(IUFindBLOB(bp, "POINTLIST"));
+  setTriangulationBlobData(IUFindBLOB(bp, "TRIANGULATION"));
+}
+
+double PointSet::scalarTripleProduct(Point *p, Point *e1, Point *e2)
+{
+  double res =
+  (p->cx * e1->cy * e2->cz)
+  + (p->cz * e1->cx * e2->cy)
+  + (p->cy * e1->cz * e2->cx)
+  - (p->cz * e1->cy * e2->cx)
+  - (p->cx * e1->cz * e2->cy)
+  - (p->cy * e1->cx * e2->cz)
+  ;
+  // for point on edge or vertice
+  //if (res < 0.0000001) return 0.0; else return res;
+  return res;
+}
+
+bool PointSet::isPointInside(Point *p, std::vector<HtmID> f)
+{
+  double r;
+  bool left=false;
+  bool right=false;
+  if (f.size() < 3) return false;
+  r = scalarTripleProduct(p, &PointSetMap->at(f[2]), &PointSetMap->at(f[0]));
+  if (r < 0) left = true; else right = true;
+  r = scalarTripleProduct(p, &PointSetMap->at(f[0]), &PointSetMap->at(f[1]));
+  if (r < 0) left = true; else right = true;
+  if (left && right) return false;
+  r = scalarTripleProduct(p, &PointSetMap->at(f[1]), &PointSetMap->at(f[2]));
+  if (r < 0) left = true; else right = true;
+  if (left && right) return false;
+  return true;
+}
+
+std::vector<HtmID> PointSet::findFace(double currentRA, double currentDEC, double jd, double pointalt, double pointaz, ln_lnlat_posn *position)
+{
+  Point point;
+  double horangle, altangle;
+  std::vector<Face *>faces;
+  std::vector<Face *>::iterator it;
+  point.aligndata.jd = jd;
+  point.aligndata.targetRA = currentRA;
+  point.aligndata.targetDEC = currentDEC;
+  AltAzFromRaDec(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.jd, 
+		   &point.celestialALT, &point.celestialAZ, position);
+
+  horangle = range360(-180.0 - point.celestialAZ) * M_PI / 180.0;
+  altangle =  point.celestialALT * M_PI / 180.0;
+  point.cx = cos(altangle) * cos(horangle);
+  point.cy = cos(altangle) * sin(horangle);
+  point.cz = sin(altangle);
+  
+  if (Triangulation->isValid() && isPointInside(&point, current)) return current;
+  faces=Triangulation->getFaces();
+  it=faces.begin(); 
+  while (it < faces.end()) {
+    if (isPointInside(&point, (*it)->v)) {
+      currentFace=*it;
+      current=(*it)->v;
+      DEBUGF(Logger::DBG_SESSION,"Align: current face is {%d, %d, %d}", PointSetMap->at(current[0]).index, PointSetMap->at(current[1]).index, PointSetMap->at(current[2]).index); 
+      return current;
+    }
+    it++;
+  }
+  if (current.size() > 0) DEBUG(Logger::DBG_SESSION,"Align: current face is empty");
+  current.clear();
+  return current;
 }

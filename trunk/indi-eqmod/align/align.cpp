@@ -81,11 +81,17 @@ Align::Align(INDI::Telescope *t)
   pointset=new PointSet(t);
   currentdeltaRA=0.0;
   currentdeltaDEC=0.0;
+  lastnearestindex=-1;
 }
 
 Align::~Align() 
 {
   delete(pointset);
+}
+
+const char *Align::getDeviceName() 
+{
+  return telescope->getDeviceName();
 }
 
 void Align::Init()
@@ -216,13 +222,20 @@ void Align::AlignNStar(double jd, struct ln_lnlat_posn *position, double current
   std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *sortedpoints;
   pointset->AltAzFromRaDec(currentRA, currentDEC, jd, &pointalt, &pointaz, position);
   sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None);
-  if (sortedpoints->size() < 2) {
+
+  std::vector<HtmID> face;
+  face=pointset->findFace(currentRA, currentDEC, jd, pointalt, pointaz, position);
+
+  //if (sortedpoints->size() < 2) {
+  if (face.size() < 3) {
     //IDLog("AlignNstar: only %d points in set - using Nearest mode\n", sortedpoints->size());
     AlignNearest(jd, position, currentRA, currentDEC, alignedRA, alignedDEC, ingoto);
   } else {
     /* Taki's Algorithm (p33): http://www.geocities.jp/toshimi_taki/matrix/matrix_method_rev_e.pdf */
-    std::set<PointSet::Distance>::iterator it = sortedpoints->begin();
-    PointSet::Point *point = pointset->getPoint(it->htmID);
+    //std::set<PointSet::Distance>::iterator it = sortedpoints->begin();
+    //PointSet::Point *point = pointset->getPoint(it->htmID);
+    std::vector<HtmID>::iterator it = face.begin();
+    PointSet::Point *point = pointset->getPoint(*it);
     double celestialMatrix[3][3];
     double invcelestialMatrix[3][3];
     double telescopeMatrix[3][3];
@@ -230,7 +243,8 @@ void Align::AlignNStar(double jd, struct ln_lnlat_posn *position, double current
     double invT[3][3];
     double l, m, n;
     double L, M, N;
-    int max=(sortedpoints->size() == 2)?2:3;
+    //int max=(sortedpoints->size() == 2)?2:3;
+    int max = 3;
 
     for (int i=0; i < max; i++) {
       //IDLog("Align NStar: align point %d htm = %s, telescope alt=%g az=%g\n", i, point->htmname, point->telescopeALT, point->telescopeAZ);
@@ -261,10 +275,12 @@ void Align::AlignNStar(double jd, struct ln_lnlat_posn *position, double current
 	sin(pointset->range360(-180.0 - point->telescopeAZ)  * M_PI / 180.0);
       telescopeMatrix[2][i]=sin(point->telescopeALT * M_PI / 180.0); 
       it++;
-      point = pointset->getPoint(it->htmID);
+      //point = pointset->getPoint(it->htmID);
+      point = pointset->getPoint(*it);
     }
 
-    if (sortedpoints->size() == 2) {
+    //if (sortedpoints->size() == 2) {
+    if (face.size() == 2) {
       /* compute vector product of the two points */
       /* and insert it in the set */
       double norm=1.0;
@@ -376,7 +392,7 @@ void Align::AlignNStar(double jd, struct ln_lnlat_posn *position, double current
       pointset->RaDecFromAltAz(alignedalt, alignedaz, jd, alignedRA, alignedDEC, position);
       currentdeltaRA=*alignedRA - currentRA;
       currentdeltaDEC=*alignedDEC - currentDEC;
-      IDMessage(telescope->getDeviceName(), "GOTO ALign NStar: delta RA = %f, delta DEC  = %f alt=%f az=%f\n", currentdeltaRA, currentdeltaDEC, alignedalt, alignedaz);
+      DEBUGF(Logger::DBG_SESSION,"GOTO ALign NStar: delta RA = %f, delta DEC  = %f alt=%f az=%f", currentdeltaRA, currentdeltaDEC, alignedalt, alignedaz);
 
     }
     //IDLog("ALign NStar: delta RA = %f, delta DEC = %f\n", (*alignedRA - currentRA), (*alignedDEC - currentDEC));
@@ -397,6 +413,8 @@ void Align::AlignNearest(double jd, struct ln_lnlat_posn *position, double curre
     //IDLog("AlignNearest: empty set\n");
   } else {
     PointSet::Point *point = pointset->getPoint(sortedpoints->begin()->htmID);
+    if (lastnearestindex != point->index) DEBUGF(Logger::DBG_SESSION,"Align: current point is %d\n", point->index);
+    lastnearestindex=point->index;
     *alignedRA = currentRA;
     *alignedDEC = currentDEC;
     if (!(ingoto)) {
@@ -407,7 +425,7 @@ void Align::AlignNearest(double jd, struct ln_lnlat_posn *position, double curre
       *alignedDEC -= (point->aligndata.targetDEC - point->aligndata.telescopeDEC);
       currentdeltaRA=*alignedRA - currentRA;
       currentdeltaDEC=*alignedDEC - currentDEC;
-      IDMessage(telescope->getDeviceName(), "GOTO ALign Nearest: delta RA = %f, delta DEC  = %f\n",  currentdeltaRA, currentdeltaDEC);
+      DEBUGF(Logger::DBG_SESSION, "GOTO ALign Nearest: delta RA = %f, delta DEC  = %f",  currentdeltaRA, currentdeltaDEC);
     }
     //IDLog("ALign Nearest: align point %s telescope alt = %f, az =%f\n", point->htmname, point->telescopeALT, point->telescopeAZ);
     //IDLog("ALign Nearest: delta RA = %c %f, delta DEC = %c %f\n", (ingoto?'-':'+'), (point->aligndata.targetRA - point->aligndata.telescopeRA), 
@@ -426,7 +444,7 @@ void Align::AlignGoto(SyncData globalsync, double jd, struct ln_lnlat_posn *posi
       currentdeltaDEC=-(syncdata.targetDEC - syncdata.telescopeDEC);
       *gotoRA -= (syncdata.targetRA - syncdata.telescopeRA) +  globalsync.deltaRA;
       *gotoDEC -= (syncdata.targetDEC - syncdata.telescopeDEC) +  globalsync.deltaDEC;
-      IDMessage(telescope->getDeviceName(), "GOTO ALign: delta RA = %f, delta DEC  = %f\n",  currentdeltaRA, currentdeltaDEC);
+      DEBUGF(Logger::DBG_SESSION,"GOTO ALign: delta RA = %f, delta DEC  = %f",  currentdeltaRA, currentdeltaDEC);
       break;
     case NEAREST:
       AlignNearest(jd, position, *gotoRA -  globalsync.deltaRA, *gotoDEC - globalsync.deltaDEC, gotoRA, gotoDEC, true);
@@ -437,6 +455,8 @@ void Align::AlignGoto(SyncData globalsync, double jd, struct ln_lnlat_posn *posi
     case NONE:
       currentdeltaRA=0.0;
       currentdeltaDEC=0.0;
+      *gotoRA -=   globalsync.deltaRA;
+      *gotoDEC -=  globalsync.deltaDEC;
     default:
       break;
     }
@@ -465,11 +485,12 @@ void Align::AlignSync(SyncData globalsync, SyncData thissync)
   syncdata.telescopeRA=thissync.telescopeRA;
   syncdata.telescopeDEC=thissync.telescopeDEC;
 
-    pointset->AddPoint(syncdata, NULL);
-    IDLog(" Add sync point: %.8f %.8f %.8f %.8f %.8f\n", syncdata.lst, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
-    pointset->setBlobData(&AlignDataBP->bp[0]);
-    IDSetBLOB(AlignDataBP, NULL);
-    //}
+  pointset->AddPoint(syncdata, NULL);
+  DEBUGF(Logger::DBG_SESSION, "Align Sync: point added: lst=%.8f celestial RA %.8f DEC %.8f Telescope RA %.8f DEC %.8f", syncdata.lst, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
+  //IDLog(" Add Align point: %.8f %.8f %.8f %.8f %.8f\n", syncdata.lst, syncdata.targetRA, syncdata.targetDEC, syncdata.telescopeRA, syncdata.telescopeDEC);
+  pointset->setBlobData(AlignDataBP);
+  IDSetBLOB(AlignDataBP, NULL);
+  
   IUUpdateNumber(AlignPointNP, values, (char **)names, 6);
   IDSetNumber(AlignPointNP, NULL);
   IUFindNumber(AlignCountNP, "ALIGNCOUNT_POINTS")->value = pointset->getNbPoints();
@@ -480,12 +501,13 @@ void Align::AlignStandardSync(SyncData globalsync, SyncData *thissync, struct ln
 {
   double sra, sdec;
   GetAlignedCoords(globalsync, thissync->jd, position, thissync->telescopeRA, thissync->telescopeDEC, &sra, &sdec);
-  thissync->telescopeRA = sra;
-  thissync->telescopeDEC = sdec;
-  thissync->targetRA -= globalsync.deltaRA;
-  thissync->targetDEC -= globalsync.deltaDEC;
+  thissync->telescopeRA = sra- globalsync.deltaRA;
+  thissync->telescopeDEC = sdec- globalsync.deltaDEC;
+  //thissync->targetRA -= globalsync.deltaRA;
+  //thissync->targetDEC -= globalsync.deltaDEC;
   thissync->deltaRA = thissync->targetRA - thissync->telescopeRA;
   thissync->deltaDEC= thissync->targetDEC - thissync->telescopeDEC;
+  //DEBUGF(Logger::DBG_SESSION, "Mount Synced (deltaRA = %.6f deltaDEC = %.6f)", thissync->deltaRA, thissync->deltaDEC);
 }
 
 Align::AlignmentMode Align::GetAlignmentMode() 
@@ -495,6 +517,7 @@ Align::AlignmentMode Align::GetAlignmentMode()
   if (!sw) return NONE;
   if (!strcmp(sw->name,"NOALIGN")) {
     return NONE;;
+    //return SYNCS;;
   } else if (!strcmp(sw->name,"ALIGNSYNC")) {
     return SYNCS;
   } else if (!strcmp(sw->name,"ALIGNNEAREST")) {
@@ -506,7 +529,8 @@ Align::AlignmentMode Align::GetAlignmentMode()
 
 void Align::GetAlignedCoords(SyncData globalsync, double jd, struct ln_lnlat_posn *position, double currentRA, double currentDEC, double *alignedRA, double *alignedDEC)
 {
-  double values[2] = {currentRA + globalsync.deltaRA, currentDEC + globalsync.deltaDEC };
+  //double values[2] = {currentRA + globalsync.deltaRA, currentDEC + globalsync.deltaDEC };
+  double values[2] = {currentRA , currentDEC  };
   const char *names[2] = {"ALIGNTELESCOPE_RA", "ALIGNTELESCOPE_DE" };
   IUUpdateNumber(AlignTelescopeCoordsNP, values, (char **)names, 2);
   IDSetNumber(AlignTelescopeCoordsNP, NULL);
@@ -519,10 +543,10 @@ void Align::GetAlignedCoords(SyncData globalsync, double jd, struct ln_lnlat_pos
     break;
   case SYNCS:
     *alignedRA = currentRA + globalsync.deltaRA; *alignedDEC = currentDEC + globalsync.deltaDEC;
-    if (syncdata.lst != 0.0) {
-      *alignedRA += (syncdata.targetRA - syncdata.telescopeRA);
-      *alignedDEC += (syncdata.targetDEC - syncdata.telescopeDEC);
-    }
+    //if (syncdata.lst != 0.0) {
+    //  *alignedRA += (syncdata.targetRA - syncdata.telescopeRA);
+    //  *alignedDEC += (syncdata.targetDEC - syncdata.telescopeDEC);
+    //}
     break;
   case NONE:
     *alignedRA = currentRA + globalsync.deltaRA;
@@ -598,13 +622,17 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 	  if (!strcmp(sw->name,"ALIGNLISTADD")) {
 	    pointset->AddPoint(syncdata, NULL);
 	    IDMessage(telescope->getDeviceName(), "Align: added point to list");;
-	    pointset->setBlobData(&AlignDataBP->bp[0]);
+	    pointset->setBlobData(AlignDataBP);
 	    IDSetBLOB(AlignDataBP, NULL);
+	    IUFindNumber(AlignCountNP, "ALIGNCOUNT_POINTS")->value = pointset->getNbPoints();
+	    IDSetNumber(AlignCountNP, NULL);
 	  } else if (!strcmp(sw->name,"ALIGNLISTCLEAR")) {
 	    pointset->Reset();
 	    IDMessage(telescope->getDeviceName(), "Align: list cleared");;
-	    pointset->setBlobData(&AlignDataBP->bp[0]);
+	    pointset->setBlobData(AlignDataBP);
 	    IDSetBLOB(AlignDataBP, NULL);
+	    IUFindNumber(AlignCountNP, "ALIGNCOUNT_POINTS")->value = pointset->getNbPoints();
+	    IDSetNumber(AlignCountNP, NULL);
 	  } else if (!strcmp(sw->name,"ALIGNWRITEFILE")) {
 	    char *res;
 	    res=pointset->WriteDataFile(IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
@@ -622,8 +650,10 @@ bool Align::ISNewSwitch (const char *dev, const char *name, ISState *states, cha
 			IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text, res);
 	    else
 	      IDMessage(telescope->getDeviceName(), "Align: Data loaded from file %s", IUFindText(AlignDataFileTP,"ALIGNDATAFILENAME")->text);
-	    pointset->setBlobData(&AlignDataBP->bp[0]);
+	    pointset->setBlobData(AlignDataBP);
 	    IDSetBLOB(AlignDataBP, NULL);
+	    IUFindNumber(AlignCountNP, "ALIGNCOUNT_POINTS")->value = pointset->getNbPoints();
+	    IDSetNumber(AlignCountNP, NULL);
 	  }
 
 	  AlignListSP->s=IPS_OK;

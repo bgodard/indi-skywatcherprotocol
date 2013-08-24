@@ -145,6 +145,7 @@ class EQMod : public INDI::Telescope, public INDI::GuiderInterface
 	void setStepperSimulation (bool enable);
 
 	void computePolarAlign(SyncData s1, SyncData s2, double lat, double *tpaalt, double *tpaaz);
+	void starPolarAlign(double lst, double ra, double dec, double theta, double gamma, double *tra, double *tdec); 
 
     public:
         EQMod();
