@@ -430,7 +430,6 @@ bool EQMod::updateProperties()
 	    //TODO unpark mount if desired
 	  }
 	
-	  //TODO start tracking ? 
 	  TrackState=SCOPE_IDLE;
 	} 
 	catch(EQModError e) {
@@ -1128,7 +1127,7 @@ bool EQMod::Sync(double ra,double dec)
   DEBUGF(Logger::DBG_SESSION, "Mount Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
   //IDLog("Mount Synced (deltaRA = %.6f deltaDEC = %.6f)\n", syncdata.deltaRA, syncdata.deltaDEC);
   if (syncdata2.lst!=0.0) {
-    computePolarAlign(syncdata, syncdata2, getLatitude(), &tpa_alt, &tpa_az);
+    computePolarAlign(syncdata2, syncdata, getLatitude(), &tpa_alt, &tpa_az);
     IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_ALT")->value=tpa_alt;
     IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_AZ")->value=tpa_az;
     IDSetNumber(SyncPolarAlignNP, NULL); 
@@ -1322,7 +1321,7 @@ bool EQMod::ISNewNumber (const char *dev, const char *name, double values[], cha
 	 DEBUGF(Logger::DBG_SESSION, "Mount manually Synced (deltaRA = %.6f deltaDEC = %.6f)", syncdata.deltaRA, syncdata.deltaDEC);
 	 //IDLog("Mount Synced (deltaRA = %.6f deltaDEC = %.6f)\n", syncdata.deltaRA, syncdata.deltaDEC);
 	 if (syncdata2.lst!=0.0) {
-	   computePolarAlign(syncdata, syncdata2, getLatitude(), &tpa_alt, &tpa_az);
+	   computePolarAlign(syncdata2, syncdata, getLatitude(), &tpa_alt, &tpa_az);
 	   IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_ALT")->value=tpa_alt;
 	   IUFindNumber(SyncPolarAlignNP, "SYNCPOLARALIGN_AZ")->value=tpa_az;
 	   IDSetNumber(SyncPolarAlignNP, NULL); 
@@ -1831,6 +1830,11 @@ From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
   double cosaz, sinaz;
   double beta;
 
+  // Star s2 polar align
+  double s2tra, s2tdec;
+  char s2trasexa[13], s2tdecsexa[13];
+  char s2rasexa[13], s2decsexa[13];
+
   alpha1 = ln_deg_to_rad((s1.telescopeRA - s1.lst) * 360.0 / 24.0);
   delta1 = ln_deg_to_rad(s1.telescopeDEC);
   alpha2 = ln_deg_to_rad((s2.telescopeRA - s2.lst) * 360.0 / 24.0);
@@ -1839,6 +1843,8 @@ From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
   cdelta1 = ln_deg_to_rad(s1.targetDEC);
   calpha2 = ln_deg_to_rad((s2.targetRA - s2.lst) * 360.0 / 24.0);
   cdelta2 = ln_deg_to_rad(s2.targetDEC);
+
+  if ((calpha2 == calpha1) || (alpha1 == alpha2)) return;
 
   cosDelta1=sin(cdelta1) * sin(cdelta2) + (cos(cdelta1) * cos(cdelta2) * cos(calpha2 - calpha1));
   cosDelta2=sin(delta1) * sin(delta2) + (cos(delta1) * cos(delta2) * cos(alpha2 - alpha1));
@@ -1849,7 +1855,7 @@ From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
     DEBUGF(Logger::DBG_DEBUG, "Angular distance of the two stars is %g\n", Delta);
 
   //cosd2md1 = sin(delta1) * sin(delta2) + cos(delta1) * cos(delta2);
-  cosd2pd1 = ((cos(delta2 - delta1) * (1 + cos(alpha2 - alpha1))) - (2.0 * cosDelta1)) / (1 - cos(alpha2 - alpha1));
+  cosd2pd1 = ((cos(delta2 - delta1) * (1 + cos(alpha2 - alpha1))) - (2.0 * cosDelta2)) / (1 - cos(alpha2 - alpha1));
   d2pd1=acos(cosd2pd1);
   if (delta2 * delta1 > 0.0) {/* same sign */
     if (delta1 < 0.0) d2pd1 = -d2pd1;
@@ -1880,8 +1886,10 @@ From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
   sintpaalpha = (cos(calpha1) * cosama2 - cos(calpha2) * cosama1) / sin(calpha2 - calpha1);
   //tpaalpha = acos(costpaalpha);
   //if (sintpaalpha < 0) tpaalpha = 2 * M_PI - tpaalpha;
-  tpaalpha=atan2(sintpaalpha, costpaalpha);
-  DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (rad): delta = %g alpha = %g\n", tpadelta, tpaalpha);
+  // tpadelta and tpaaplha are very near M_PI / 2 d: DON'T USE  atan2
+  //tpaalpha=atan2(sintpaalpha, costpaalpha);
+  tpaalpha=2 * atan2(sintpaalpha, (1.0 + costpaalpha));
+  DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (rad): delta(dec) = %g alpha(ha) = %g\n", tpadelta, tpaalpha);
 
   beta = ln_deg_to_rad(lat);
   *tpaalt = asin(sin(tpadelta) * sin(beta) + (cos(tpadelta) * cos(beta) * cos(tpaalpha)));
@@ -1892,6 +1900,72 @@ From // // http://www.whim.org/nebula/math/pdf/twostar.pdf
   *tpaaz=atan2(sinaz, cosaz);
   *tpaalt=ln_rad_to_deg(*tpaalt);
   *tpaaz = ln_rad_to_deg(*tpaaz);
-  DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (deg): alt = %g az = %g\n", *tpaalt, *tpaaz);    
+  DEBUGF(Logger::DBG_DEBUG,"Computed Telescope polar alignment (deg): alt = %g az = %g\n", *tpaalt, *tpaaz);  
   
+  starPolarAlign(s2.lst, s2.targetRA, s2.targetDEC, (M_PI / 2)-tpaalpha, (M_PI / 2) - tpadelta, &s2tra, &s2tdec);
+  fs_sexa(s2trasexa, s2tra, 2, 3600);
+  fs_sexa(s2tdecsexa, s2tdec, 3, 3600);
+  fs_sexa(s2rasexa, s2.targetRA, 2, 3600);
+  fs_sexa(s2decsexa, s2.targetDEC, 3, 3600);
+  DEBUGF(Logger::DBG_SESSION, "Star (RA=%s DEC=%s) Polar Align Coords: RA=%s DEC=%s", s2rasexa, s2decsexa, s2trasexa, s2tdecsexa);
+  s2tra=s2.targetRA + (s2.targetRA-s2tra);
+  s2tdec=s2.targetDEC + (s2.targetDEC-s2tdec);
+  fs_sexa(s2trasexa, s2tra, 2, 3600);
+  fs_sexa(s2tdecsexa, s2tdec, 3, 3600);
+  fs_sexa(s2rasexa, s2.targetRA, 2, 3600);
+  fs_sexa(s2decsexa, s2.targetDEC, 3, 3600);
+
+  DEBUGF(Logger::DBG_SESSION, "Star (RA=%s DEC=%s) Polar Align Goto: RA=%s DEC=%s", s2rasexa, s2decsexa, s2trasexa, s2tdecsexa);
+}
+
+void EQMod::starPolarAlign(double lst, double ra, double dec, double theta, double gamma, double *tra, double *tdec)
+{
+  double rotz[3][3];
+  double rotx[3][3];
+  double mat[3][3];
+
+  double H; 
+  double Lc, Mc, Nc;
+
+  double mra, mdec;
+  double L, M, N;
+  int i, j, k;
+
+  H=(lst - ra) * M_PI / 12.0;
+  dec=dec * M_PI / 180.0; 
+
+  rotz[0][0]=cos(theta); rotz[0][1]=-sin(theta); rotz[0][2]=0.0;
+  rotz[1][0]=sin(theta); rotz[1][1]=cos(theta); rotz[1][2]=0.0;
+  rotz[2][0]=0.0; rotz[2][1]=0.0; rotz[2][2]=1.0;
+
+  rotx[0][0]=1.0; rotx[0][1]=0.0; rotx[0][2]=0.0;
+  rotx[1][0]=0.0; rotx[1][1]=cos(gamma); rotx[1][2]=-sin(gamma); 
+  rotx[2][0]=0.0; rotx[2][1]=sin(gamma); rotx[2][2]=cos(gamma);
+
+  for (i=0; i < 3; i++) {
+    for (j=0; j < 3; j++) {
+      mat[i][j] = 0.0;
+      for (k=0; k < 3; k++)
+	mat[i][j] += rotx[i][k] * rotz[k][j];
+    }
+  }
+
+  Lc=cos(dec) * cos(-H);
+  Mc=cos(dec) * sin(-H);
+  Nc=sin(dec);
+
+  L=mat[0][0] * Lc + mat[0][1] * Mc + mat[0][2] * Nc;
+  M=mat[1][0] * Lc + mat[1][1] * Mc + mat[1][2] * Nc;
+  N=mat[2][0] * Lc + mat[2][1] * Mc + mat[2][2] * Nc;
+
+  mra=atan2(M,L) * 12.0 / M_PI;
+  //mra=atan(M/L) * 12.0 / M_PI;
+  //printf("atan(M/L) %g L=%g M=%g N=%g\n", mra, L, M, N);
+  //if (L < 0.0) mra = 12.0 + mra;
+  mra+=lst;
+  while (mra<0.0) mra+=24.0;
+  while (mra>24.0) mra-=24.0;
+  mdec=asin(N) * 180.0 / M_PI;
+  *tra = mra;
+  *tdec=mdec;
 }

@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <inditelescope.h>
 
-//#include "../eqmod.h"
+#include "../logger/Logger.h"
 
 typedef struct SyncData SyncData;
 
@@ -52,10 +52,14 @@ class Align
 
   double currentdeltaRA, currentdeltaDEC;
 
+  int lastnearestindex;
+
 public:
 
   Align(INDI::Telescope *);
   virtual ~Align();
+
+  const char *getDeviceName(); // used for logger
  
   virtual bool initProperties();
   virtual void ISGetProperties (const char *dev);

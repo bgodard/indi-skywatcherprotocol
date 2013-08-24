@@ -12,6 +12,7 @@
 </defNumberVector>
 <defBLOBVector device="EQMod Mount" name="ALIGNDATA" label="Align Data" group="Align" state="Idle" perm="rw">
 <defBLOB name="POINTLIST" label="Points List"/>
+<defBLOB name="TRIANGULATION" label="Triangulation"/>
 </defBLOBVector>
 <defSwitchVector device="EQMod Mount" name="ALIGNMODE" label="Alignment Mode" group="Align" state="Idle" perm="rw" rule="OneOfMany">
 <defSwitch name="NOALIGN" label="No Alignment">

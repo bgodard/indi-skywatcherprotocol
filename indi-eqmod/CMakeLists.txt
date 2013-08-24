@@ -42,7 +42,8 @@ if(WITH_SIMULATOR)
 endif(WITH_SIMULATOR)
 if(WITH_ALIGN_GEEHALEL)
   set(eqmod_SRCS ${eqmod_SRCS}
-   ${CMAKE_SOURCE_DIR}/align/align.cpp ${CMAKE_SOURCE_DIR}/align/pointset.cpp ${CMAKE_SOURCE_DIR}/align/htm.c)
+   ${CMAKE_SOURCE_DIR}/align/align.cpp ${CMAKE_SOURCE_DIR}/align/pointset.cpp ${CMAKE_SOURCE_DIR}/align/htm.c
+   ${CMAKE_SOURCE_DIR}/align/triangulate.cpp ${CMAKE_SOURCE_DIR}/align/triangulate_chull.cpp ${CMAKE_SOURCE_DIR}/align/chull/chull.c)
 endif(WITH_ALIGN_GEEHALEL)
 
 add_executable(indi_eqmod_telescope ${eqmod_SRCS})
