@@ -51,6 +51,7 @@ public:
     HtmName htmname;
     double celestialALT, celestialAZ, telescopeALT, telescopeAZ;
     double cx, cy ,cz;
+    double tx, ty ,tz;
     AlignData aligndata;
   } Point;
   typedef struct Distance {
@@ -73,8 +74,8 @@ public:
   void setBlobData(IBLOBVectorProperty *bp);
   void setPointBlobData(IBLOB *blob); 
   void setTriangulationBlobData(IBLOB *blob); 
-  std::set<Distance, bool (*)(Distance, Distance)> *ComputeDistances(double alt, double az, PointFilter filter);
-  std::vector<HtmID> findFace(double currentRA, double currentDEC, double jd, double pointalt, double pointaz, ln_lnlat_posn *position);
+  std::set<Distance, bool (*)(Distance, Distance)> *ComputeDistances(double alt, double az, PointFilter filter, bool ingoto);
+  std::vector<HtmID> findFace(double currentRA, double currentDEC, double jd, double pointalt, double pointaz, ln_lnlat_posn *position, bool ingoto);
   double lat, lon, alt;
   double range24(double r);
   double range360(double r);
@@ -82,8 +83,8 @@ public:
   void AltAzFromRaDec(double ra, double dec, double jd, double *alt, double *az, struct ln_lnlat_posn *pos);
   void AltAzFromRaDecSidereal(double ra, double dec, double lst, double *alt, double *az, struct ln_lnlat_posn *pos);
   void RaDecFromAltAz(double alt, double az, double jd, double *ra, double *dec, struct ln_lnlat_posn *pos) ;
-  double scalarTripleProduct(Point *p, Point *e1, Point *e2);
-  bool isPointInside(Point *p, std::vector<HtmID> f);
+  double scalarTripleProduct(Point *p, Point *e1, Point *e2, bool ingoto);
+  bool isPointInside(Point *p, std::vector<HtmID> f, bool ingoto);
  protected:
  private:
 
