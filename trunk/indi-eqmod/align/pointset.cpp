@@ -118,14 +118,18 @@ const char *PointSet::getDeviceName()
   return telescope->getDeviceName();
 }
 
-std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *PointSet::ComputeDistances(double alt, double az, PointFilter filter) {
+std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *PointSet::ComputeDistances(double alt, double az, PointFilter filter, bool ingoto) {
   std::map<HtmID, Point>::iterator it;
   std::set<Distance, bool (*)(Distance, Distance)> *distances = new std::set<Distance, bool (*)(Distance, Distance)>(compelt);
   std::set<Distance>::iterator distit;
   std::pair<std::set<Distance>::iterator, bool> ret;
   /* IDLog("Compute distances for point alt=%f az=%f\n", alt, az);*/
   for ( it=PointSetMap->begin() ; it != PointSetMap->end(); it++ ) {
-    double d = sphere_unit_distance(az, (*it).second.celestialAZ, alt, (*it).second.celestialALT);
+    double d;
+    if (ingoto) 
+      d = sphere_unit_distance(az, (*it).second.celestialAZ, alt, (*it).second.celestialALT);
+    else
+      d = sphere_unit_distance(az, (*it).second.telescopeAZ, alt, (*it).second.telescopeALT);
     Distance elt;
     elt.htmID=(*it).first;
     elt.value=d;
@@ -151,23 +155,29 @@ void PointSet::AddPoint(AlignData aligndata, struct ln_lnlat_posn *pos)
   //point.telescopeAZ = (range24(point.aligndata.lst - point.aligndata.telescopeRA - 12.0) * 360.0) / 24.0;
   //point.celestialALT = point.aligndata.targetDEC + lat;
   //point.telescopeALT = point.aligndata.telescopeDEC + lat;
-  if (point.aligndata.jd > 0.0)
+  if (point.aligndata.jd > 0.0) 
+    {
     AltAzFromRaDec(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.jd, 
 		   &point.celestialALT, &point.celestialAZ, pos);
-  else
+    AltAzFromRaDec(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.jd, 
+		   &point.telescopeALT, &point.telescopeAZ, pos);
+    } else
+    { 
     AltAzFromRaDecSidereal(point.aligndata.targetRA, point.aligndata.targetDEC, point.aligndata.lst, 
 		   &point.celestialALT, &point.celestialAZ, pos);
+    AltAzFromRaDecSidereal(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.lst, 
+		   &point.telescopeALT, &point.telescopeAZ, pos);
+    }
   horangle = range360(-180.0 - point.celestialAZ) * M_PI / 180.0;
   altangle =  point.celestialALT * M_PI / 180.0;
   point.cx = cos(altangle) * cos(horangle);
   point.cy = cos(altangle) * sin(horangle);
   point.cz = sin(altangle);
-  if (point.aligndata.jd > 0.0)
-    AltAzFromRaDec(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.jd, 
-		   &point.telescopeALT, &point.telescopeAZ, pos);
-  else
-    AltAzFromRaDecSidereal(point.aligndata.telescopeRA, point.aligndata.telescopeDEC, point.aligndata.lst, 
-		   &point.telescopeALT, &point.telescopeAZ, pos);
+  horangle = range360(-180.0 - point.telescopeAZ) * M_PI / 180.0;
+  altangle =  point.telescopeALT * M_PI / 180.0;
+  point.tx = cos(altangle) * cos(horangle);
+  point.ty = cos(altangle) * sin(horangle);
+  point.tz = sin(altangle);
   point.htmID=cc_radec2ID(point.celestialAZ, point.celestialALT, 19);
   cc_ID2name(point.htmname,  point.htmID);
   point.index=getNbPoints();
@@ -356,6 +366,9 @@ XMLEle *PointSet::toXML() {
     char pcdata[30];
     aligndata=(*it).second.aligndata;
     alignxml=addXMLEle(sitexml, "point");
+    data=addXMLEle(alignxml, "index");
+    snprintf(pcdata, sizeof(pcdata), "%d", (*it).second.index);
+    editXMLEle(data, pcdata);
     data=addXMLEle(alignxml, "synctime");
     snprintf(pcdata, sizeof(pcdata), "%g", aligndata.lst);
     editXMLEle(data, pcdata);
@@ -413,39 +426,50 @@ void PointSet::setBlobData(IBLOBVectorProperty *bp)
   setTriangulationBlobData(IUFindBLOB(bp, "TRIANGULATION"));
 }
 
-double PointSet::scalarTripleProduct(Point *p, Point *e1, Point *e2)
+double PointSet::scalarTripleProduct(Point *p, Point *e1, Point *e2, bool ingoto)
 {
-  double res =
-  (p->cx * e1->cy * e2->cz)
-  + (p->cz * e1->cx * e2->cy)
-  + (p->cy * e1->cz * e2->cx)
-  - (p->cz * e1->cy * e2->cx)
-  - (p->cx * e1->cz * e2->cy)
-  - (p->cy * e1->cx * e2->cz)
-  ;
+  double res;
+  if (ingoto)
+    res =
+      (p->cx * e1->cy * e2->cz)
+      + (p->cz * e1->cx * e2->cy)
+      + (p->cy * e1->cz * e2->cx)
+      - (p->cz * e1->cy * e2->cx)
+      - (p->cx * e1->cz * e2->cy)
+      - (p->cy * e1->cx * e2->cz)
+      ;
+  else
+    res =
+      (p->cx * e1->ty * e2->tz)
+      + (p->cz * e1->tx * e2->ty)
+      + (p->cy * e1->tz * e2->tx)
+      - (p->cz * e1->ty * e2->tx)
+      - (p->cx * e1->tz * e2->ty)
+      - (p->cy * e1->tx * e2->tz)
+      ;
   // for point on edge or vertice
   //if (res < 0.0000001) return 0.0; else return res;
   return res;
 }
 
-bool PointSet::isPointInside(Point *p, std::vector<HtmID> f)
+bool PointSet::isPointInside(Point *p, std::vector<HtmID> f, bool ingoto)
 {
   double r;
   bool left=false;
   bool right=false;
   if (f.size() < 3) return false;
-  r = scalarTripleProduct(p, &PointSetMap->at(f[2]), &PointSetMap->at(f[0]));
+  r = scalarTripleProduct(p, &PointSetMap->at(f[2]), &PointSetMap->at(f[0]), ingoto);
   if (r < 0) left = true; else right = true;
-  r = scalarTripleProduct(p, &PointSetMap->at(f[0]), &PointSetMap->at(f[1]));
+  r = scalarTripleProduct(p, &PointSetMap->at(f[0]), &PointSetMap->at(f[1]), ingoto);
   if (r < 0) left = true; else right = true;
   if (left && right) return false;
-  r = scalarTripleProduct(p, &PointSetMap->at(f[1]), &PointSetMap->at(f[2]));
+  r = scalarTripleProduct(p, &PointSetMap->at(f[1]), &PointSetMap->at(f[2]), ingoto);
   if (r < 0) left = true; else right = true;
   if (left && right) return false;
   return true;
 }
 
-std::vector<HtmID> PointSet::findFace(double currentRA, double currentDEC, double jd, double pointalt, double pointaz, ln_lnlat_posn *position)
+std::vector<HtmID> PointSet::findFace(double currentRA, double currentDEC, double jd, double pointalt, double pointaz, ln_lnlat_posn *position, bool ingoto)
 {
   Point point;
   double horangle, altangle;
@@ -463,11 +487,11 @@ std::vector<HtmID> PointSet::findFace(double currentRA, double currentDEC, doubl
   point.cy = cos(altangle) * sin(horangle);
   point.cz = sin(altangle);
   
-  if (Triangulation->isValid() && isPointInside(&point, current)) return current;
+  if (Triangulation->isValid() && isPointInside(&point, current, ingoto)) return current;
   faces=Triangulation->getFaces();
   it=faces.begin(); 
   while (it < faces.end()) {
-    if (isPointInside(&point, (*it)->v)) {
+    if (isPointInside(&point, (*it)->v, ingoto)) {
       currentFace=*it;
       current=(*it)->v;
       DEBUGF(Logger::DBG_SESSION,"Align: current face is {%d, %d, %d}", PointSetMap->at(current[0]).index, PointSetMap->at(current[1]).index, PointSetMap->at(current[2]).index); 

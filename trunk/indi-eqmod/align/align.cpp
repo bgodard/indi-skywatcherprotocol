@@ -219,12 +219,12 @@ void Align::AlignNStar(double jd, struct ln_lnlat_posn *position, double current
   //double pointaz = (pointset->range24(lst - currentRA - 12.0) * 360.0) / 24.0;
   //double pointalt = currentDEC + pointset->lat;
   double pointaz, pointalt;
-  std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *sortedpoints;
+  //std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *sortedpoints;
   pointset->AltAzFromRaDec(currentRA, currentDEC, jd, &pointalt, &pointaz, position);
-  sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None);
+  //sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None, ingoto);
 
   std::vector<HtmID> face;
-  face=pointset->findFace(currentRA, currentDEC, jd, pointalt, pointaz, position);
+  face=pointset->findFace(currentRA, currentDEC, jd, pointalt, pointaz, position, ingoto);
 
   //if (sortedpoints->size() < 2) {
   if (face.size() < 3) {
@@ -406,7 +406,7 @@ void Align::AlignNearest(double jd, struct ln_lnlat_posn *position, double curre
   double pointaz, pointalt;
   std::set<PointSet::Distance, bool (*)(PointSet::Distance, PointSet::Distance)> *sortedpoints;
   pointset->AltAzFromRaDec(currentRA, currentDEC, jd, &pointalt, &pointaz, position);
-  sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None);
+  sortedpoints=pointset->ComputeDistances(pointalt, pointaz, PointSet::None, ingoto);
   if (sortedpoints->empty()) {
     *alignedRA = currentRA;
     *alignedDEC = currentDEC;
